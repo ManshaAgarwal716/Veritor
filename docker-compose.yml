@@ -9,10 +9,10 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - VERITOR_LOG_LEVEL=INFO
-      - VERITOR_OLLAMA_BASE_URL=http://ollama:11434
-      - VERITOR_DATABASE_URL=postgresql+psycopg://veritor:veritor@postgres:5432/veritor
-      - VERITOR_CORS_ORIGINS=["http://localhost:3000","http://127.0.0.1:3000"]
+      - VERITOR_LOG_LEVEL=${VERITOR_LOG_LEVEL:-INFO}
+      - VERITOR_OLLAMA_BASE_URL=${VERITOR_OLLAMA_BASE_URL:-http://ollama:11434}
+      - VERITOR_DATABASE_URL=${VERITOR_DATABASE_URL:-postgresql+psycopg://veritor:veritor@postgres:5432/veritor}
+      - VERITOR_CORS_ORIGINS=${VERITOR_CORS_ORIGINS:-["http://localhost:3000","http://127.0.0.1:3000"]}
     depends_on:
       postgres:
         condition: service_healthy
@@ -35,7 +35,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
     depends_on:
       backend:
         condition: service_healthy
@@ -51,9 +51,9 @@ services:
     container_name: veritor-postgres
     restart: unless-stopped
     environment:
-      - POSTGRES_USER=veritor
-      - POSTGRES_PASSWORD=veritor
-      - POSTGRES_DB=veritor
+      - POSTGRES_USER=${POSTGRES_USER:-veritor}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-veritor}
+      - POSTGRES_DB=${POSTGRES_DB:-veritor}
     ports:
       - "5432:5432"
     volumes:
