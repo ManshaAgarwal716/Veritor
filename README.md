@@ -1,149 +1,163 @@
 # Veritor
 
-[![CI](https://github.com/yashasveesingh078/Veritor/actions/workflows/ci.yml/badge.svg)](https://github.com/yashasveesingh078/Veritor/actions/workflows/ci.yml)
+[![CI](https://github.com/ManshaAgarwal716/Veritor/actions/workflows/ci.yml/badge.svg)](https://github.com/ManshaAgarwal716/Veritor/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![Python 3.12+](https://img.shields.io/badge/Python-3.12%2B-blue.svg)](https://www.python.org/)
+[![Next.js 16](https://img.shields.io/badge/Next.js-16-black.svg)](https://nextjs.org/)
 
-Veritor compares packages published on npm and PyPI with their source
-repositories, explains each difference with evidence, and flags modifications
-that it cannot explain or that add risky behaviour.
+Veritor compares packages published on **npm** and **PyPI** with their upstream source code repositories on GitHub, explains each difference with deterministic evidence, and flags unauthorized modifications, deceptive build artifacts, or supply chain attacks.
 
-Built by team CommitCrew for Problem 04: Published Package vs Source Code
-Integrity Analyzer. See [hackathon.md](hackathon.md) and [docs/CI-CD.md](docs/CI-CD.md).
-
----
-
-## Layout
-
-| Path | Contents |
-| --- | --- |
-| `frontend/` | Next.js 16 app (TypeScript, App Router, Tailwind CSS) |
-| `backend/` | FastAPI app, safe tarball/git extraction, static security analyzer, Ollama AI investigator |
-| `docs/CI-CD.md` | Detailed CI/CD architecture and security scanning documentation |
-| `docker-compose.yml` | Full-stack orchestration (Frontend, Backend, Ollama) |
-| `.github/workflows/ci.yml` | CI pipeline: linting, typing, pytest, npm test, security audits, Docker validation |
-| `.github/workflows/release.yml` | CD pipeline: GHCR container publishing and GitHub Releases |
+Built for **Problem 04: Published Package vs Source Code Integrity Analyzer**.
 
 ---
 
-## Requirements
+## Documentation
 
-- Node.js 20.9+ (or Node.js 24)
-- Python 3.12+
-- Docker & Docker Compose (optional for containerized deployment)
+- **[System Architecture](docs/architecture.md)**: Technical architecture, pipeline stages, security models, and verification flow.
+- **[REST API Reference](docs/api.md)**: Complete OpenAPI specification for FastAPI endpoints.
+- **[Hackathon Demonstration Guide](docs/demo.md)**: Step-by-step evaluation workflows and live test commands.
+- **[CI/CD & Security Architecture](docs/CI-CD.md)**: GitHub Actions workflows, GHCR Docker publishing, and vulnerability scanners.
+- **[Hackathon Context & Goals](hackathon.md)**: Problem statement breakdown and original requirements.
 
 ---
 
-## Backend
+## Core Capabilities
 
-```sh
-cd backend
-python3.12 -m venv .venv
-source .venv/bin/activate
-pip install -e ".[dev]"
-cp ../.env.example ../.env   # optional: the defaults work without it
-uvicorn app.main:app --reload
+1. **Multi-Ecosystem Support**:
+   - **npm**: Registry metadata validation, tarball download & SHA-512 integrity verification, `package.json` spoofing detection.
+   - **PyPI**: Official JSON API resolution, binary wheel (`.whl`) and source distribution (`.tar.gz`) support, PEP 508 dependency parsing.
+2. **Safe Archive Extraction**:
+   - Hardened extraction preventing directory traversal (Zip Slip), symlink escapes, and compression bombs. Enforces strict size, entry count, and depth bounds with safe `0600` POSIX permissions.
+3. **Strict Source Code Resolution**:
+   - Matches published packages to exact GitHub commits using four verifiable tiers (`RECORDED_COMMIT_AND_TAG`, `PACKAGE_TAG`, `VERSION_TAG`, `RECORDED_COMMIT`).
+   - If no exact match is proven, returns `UNCERTAIN`. Never assumes or uses a default branch.
+4. **Generated Artifact Intelligence**:
+   - Differentiates authentic source files from build outputs (`dist/`, `build/`) using bundler configs, TypeScript declarations, and bidirectional source map reverse-tracing.
+   - Categorizes files as `SOURCE_AUTHENTIC`, `LIKELY_GENERATED`, `SUSPICIOUS`, or `UNCERTAIN`.
+5. **Static AST Security Scanner**:
+   - Zero code execution AST parsing for JavaScript and TypeScript via Tree-Sitter.
+   - Analyzes differences across 7 primary rule families: `eval`/dynamic code (`EXEC`), subprocess execution (`PROC`), environment access (`ENV`), network exfiltration (`NET`), obfuscation (`OBF`), sensitive filesystem access (`FS`), and install scripts (`LIFE`).
+   - Multi-signal correlation flags compound attack vectors (e.g. Base64 decoding + dynamic execution at install time).
+6. **Cryptographic Provenance Verification**:
+   - Validates Sigstore SLSA provenance attestations and Fulcio OIDC certificates against the Rekor public transparency log.
+   - Evaluates PyPI PEP 740 digital attestations.
+   - Invariant: Missing provenance awards 0 risk points and never implies maliciousness.
+7. **Explainable Deterministic Risk Engine**:
+   - 0–100 heuristic score derived purely from verifiable static evidence.
+   - Hard security floors enforce minimum `HIGH` or `CRITICAL` risk ratings for severe anomalies.
+   - Generates complete audit trails, contributing factors, recommendations, and limitations.
+8. **Local AI Investigator**:
+   - Connects locally to Ollama running `qwen2.5-coder:7b`.
+   - Generates structured, schema-validated JSON explanations without altering deterministic risk verdicts.
+   - Fully resilient: continues operating seamlessly with structured fallback when Ollama is offline.
+9. **Continuous Release Monitoring & Evolution Engine**:
+   - Monitored package watchlist with rate-limited background checks detecting newly published versions on npm and PyPI.
+   - Release comparator tracks risk score deltas, newly introduced suspicious files, AST finding changes, and provenance downgrades.
+10. **Executive & Technical Report Exports**:
+    - **JSON Export**: Machine-readable report with cryptographic SHA-256 integrity hash.
+    - **PDF Export**: ReportLab-generated cybersecurity report with risk dial gauge, provenance verification, inventory breakdown, AST finding evidence table, AI summary, and limitations.
+11. **Production-Ready Interface**:
+    - Dark cybersecurity theme built with Next.js 16, TypeScript, Tailwind CSS, and Lucide icons.
+    - Real-time pipeline stage progress tracking, side-by-side diff viewer, interactive file tree with classification filters, and live watchlist.
+
+---
+
+## Project Structure
+
+```
+Veritor/
+├── backend/
+│   ├── app/
+│   │   ├── adapters/        # npm & PyPI registry adapters
+│   │   ├── ai/              # Ollama client & AI investigator
+│   │   ├── analysis/        # Tree-sitter static AST security scanner
+│   │   ├── api/v1/          # FastAPI REST endpoints (/scans, /watchlist)
+│   │   ├── archives/        # Safe tarball & zip extractor
+│   │   ├── comparison/      # Inventory diff & artifact intelligence
+│   │   ├── db/              # SQLAlchemy 2.0 ORM models & session factory
+│   │   ├── monitoring/      # Release detector, comparator & scheduler
+│   │   ├── provenance/      # Sigstore npm & PyPI attestation checkers
+│   │   ├── reports/         # Structured JSON & ReportLab PDF exporters
+│   │   ├── scans/           # Scan manager & async pipeline orchestrator
+│   │   ├── schemas/         # Pydantic request/response schemas
+│   │   ├── scoring/         # Deterministic 0-100 risk heuristic engine
+│   │   └── source/          # GitHub repository & commit resolution
+│   ├── alembic/             # Database schema migrations
+│   ├── tests/               # 893 pytest integration & unit tests
+│   ├── Dockerfile           # Multi-stage hardened Python container
+│   └── pyproject.toml       # Backend dependencies & tool configurations
+├── frontend/
+│   ├── src/
+│   │   ├── app/             # Next.js App Router (page, layout)
+│   │   ├── components/      # UI components (Dashboard, DiffViewer, etc.)
+│   │   └── lib/             # Typed API client, storage & interfaces
+│   ├── tests/               # Node test runner suite
+│   ├── Dockerfile           # Multi-stage optimized Node.js container
+│   └── package.json         # Frontend dependencies & scripts
+├── docs/                    # Architecture, API, CI/CD, and Demo guides
+├── .github/workflows/       # CI (ci.yml) and Release CD (release.yml)
+├── docker-compose.yml       # Production orchestration
+├── IMPLEMENTATION_PLAN.md   # Detailed implementation plan and test report
+└── .env.example             # Documented environment configuration template
 ```
 
-The API runs at <http://127.0.0.1:8000>.
-
-### Backend Validation & Security Checks
-
-```sh
-# Linting & Formatting
-ruff check . && ruff format --check .
-
-# Type checking
-mypy
-
-# Tests & Coverage
-pytest --cov=app --cov-report=term-missing
-
-# Security SAST & Dependency Audits
-bandit -r app -ll -ii
-pip-audit .
-```
-
 ---
 
-## Frontend
+## Quickstart
+
+### Option 1: Docker Compose (Recommended)
 
 ```sh
-cd frontend
-npm ci
-npm run dev
-```
-
-The app runs at <http://localhost:3000>.
-
-### Frontend Validation & Security Checks
-
-```sh
-# Linting & Type check
-npm run lint && npm run typecheck
-
-# Unit tests
-npm test
-
-# Production build check
-npm run build
-
-# High-severity dependency audit
-npm audit --audit-level=high
-```
-
----
-
-## Docker & Container Deployment
-
-### Running with Docker Compose
-
-To run the complete Veritor stack (backend, frontend, and Ollama AI engine):
-
-```sh
+# Start all services (frontend, backend, postgres, ollama)
 docker compose up --build
 ```
 
-- Frontend: <http://localhost:3000>
-- Backend API & Swagger Docs: <http://localhost:8000/docs>
-- Ollama API: <http://localhost:11434>
+- **Frontend UI**: <http://localhost:3000>
+- **Backend API & Swagger Docs**: <http://localhost:8000/docs>
+- **Health Check**: <http://localhost:8000/health>
 
-### Standalone Docker Builds
+### Option 2: Local Development
 
+#### Backend Setup
 ```sh
-# Build backend
-docker build -t veritor-backend:local ./backend
+cd backend
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+cp ../.env.example ../.env   # optional: defaults work out of the box
+uvicorn app.main:app --reload --port 8000
+```
 
-# Run backend
-docker run -p 8000:8000 --env-file .env veritor-backend:local
-
-# Build frontend
-docker build -t veritor-frontend:local ./frontend
-
-# Run frontend
-docker run -p 3000:3000 -e NEXT_PUBLIC_API_URL=http://localhost:8000 veritor-frontend:local
+#### Frontend Setup
+```sh
+cd frontend
+npm install
+npm run dev
 ```
 
 ---
 
-## CI/CD Pipeline & Releases
+## Testing & Quality Assurance
 
-Veritor uses automated GitHub Actions workflows:
+```sh
+# Backend Test Suite (893 tests)
+python3 -m pytest backend/tests
 
-1. **Continuous Integration (`ci.yml`)**:
-   - Triggers on PRs to `main`, pushes to `main`, and manual dispatch.
-   - Runs backend Ruff lint/format, Mypy typing, Pytest with code coverage artifact upload.
-   - Runs frontend ESLint, TypeScript check, unit tests, and production build.
-   - Runs multi-layer security scans: **Bandit** (Python SAST), **pip-audit** (Python CVEs), **npm audit** (Node CVEs), and **Trivy** (filesystem vulnerability and secret scanner).
-   - Validates that Docker images build cleanly.
+# Static Linting & Formatting Check
+python3 -m ruff check backend && python3 -m ruff format --check backend
 
-2. **Continuous Delivery & Releases (`release.yml`)**:
-   - Triggers automatically when a semantic version tag is pushed (e.g., `git tag v1.0.0 && git push origin v1.0.0`) or via manual workflow dispatch.
-   - Builds production multi-stage Docker images for backend and frontend.
-   - Authenticates securely to GitHub Container Registry using `GITHUB_TOKEN`.
-   - Tags and publishes images to `ghcr.io/<owner>/veritor-backend` and `ghcr.io/<owner>/veritor-frontend` with semver (`v1.0.0`), short commit SHA (`sha-abc1234`), and `latest`.
-   - Automatically publishes a GitHub Release with auto-generated release notes.
+# Strict Type Checking
+python3 -m mypy --config-file backend/pyproject.toml backend/app backend/tests
 
-For comprehensive details on security scanning thresholds, caching strategies, and release architecture, see [docs/CI-CD.md](docs/CI-CD.md).
+# Security SAST & Dependency Audits
+python3 -m bandit -r backend/app -ll -ii
+
+# Frontend Verification & Production Build
+cd frontend
+npm run lint
+npm run typecheck
+npm test
+npm run build
+```
 
 ---
 
