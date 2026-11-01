@@ -1,5 +1,7 @@
 """Scheduled background monitoring worker and rate-limited update checker."""
 
+from __future__ import annotations
+
 import asyncio
 import logging
 from datetime import UTC, datetime
@@ -17,6 +19,11 @@ from app.schemas.watchlist import MonitoringStatusResponse, WatchlistCheckRespon
 
 if TYPE_CHECKING:
     from app.scans.manager import ScanManager
+else:
+    try:
+        from app.scans.manager import ScanManager
+    except ImportError:
+        ScanManager = Any
 
 logger = logging.getLogger(__name__)
 
