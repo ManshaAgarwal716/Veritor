@@ -3,14 +3,19 @@
  */
 
 import {
+  Ecosystem,
   FileDiffItem,
   HealthCheckResponse,
+  MonitoringStatusResponse,
+  ReleaseComparisonResponse,
   ScanFilesResponse,
   ScanFindingsResponse,
   ScanReportResponse,
   ScanRequest,
   ScanResponse,
   ScanStatusResponse,
+  WatchlistCheckResponse,
+  WatchlistItem,
 } from "./types";
 
 const DEFAULT_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -162,6 +167,123 @@ export async function getScanFindings(scanId: string): Promise<ScanFindingsRespo
     },
   });
   return handleResponse<ScanFindingsResponse>(res);
+}
+
+/**
+ * Export scan report as structured JSON file blob.
+ * GET /api/v1/scans/{scan_id}/export/json
+ */
+export async function exportScanJson(scanId: string): Promise<Blob> {
+  const baseUrl = getApiBaseUrl();
+  const res = await fetch(`${baseUrl}/api/v1/scans/${encodeURIComponent(scanId)}/export/json`);
+  if (!res.ok) {
+    throw new ApiError(`Failed to export JSON report: ${res.statusText}`, res.status);
+  }
+  return res.blob();
+}
+
+/**
+ * Export scan report as PDF document blob.
+ * GET /api/v1/scans/{scan_id}/export/pdf
+ */
+export async function exportScanPdf(scanId: string): Promise<Blob> {
+  const baseUrl = getApiBaseUrl();
+  const res = await fetch(`${baseUrl}/api/v1/scans/${encodeURIComponent(scanId)}/export/pdf`);
+  if (!res.ok) {
+    throw new ApiError(`Failed to export PDF report: ${res.statusText}`, res.status);
+  }
+  return res.blob();
+}
+
+/**
+ * Compare scan report with previous completed release.
+ * GET /api/v1/scans/{scan_id}/compare-previous
+ */
+export async function compareScanWithPrevious(scanId: string): Promise<ReleaseComparisonResponse> {
+  const baseUrl = getApiBaseUrl();
+  const res = await fetch(`${baseUrl}/api/v1/scans/${encodeURIComponent(scanId)}/compare-previous`);
+  return handleResponse<ReleaseComparisonResponse>(res);
+}
+
+/**
+ * Compare any two completed scans.
+ * GET /api/v1/scans/compare?head_scan_id=...&base_scan_id=...
+ */
+export async function compareTwoScans(
+  headScanId: string,
+  baseScanId?: string,
+): Promise<ReleaseComparisonResponse> {
+  const baseUrl = getApiBaseUrl();
+  const params = new URLSearchParams({ head_scan_id: headScanId });
+  if (baseScanId) {
+    params.set("base_scan_id", baseScanId);
+  }
+  const res = await fetch(`${baseUrl}/api/v1/scans/compare?${params.toString()}`);
+  return handleResponse<ReleaseComparisonResponse>(res);
+}
+
+/**
+ * Fetch all monitored watchlist packages from backend API.
+ * GET /api/v1/watchlist
+ */
+export async function getWatchlist(): Promise<WatchlistItem[]> {
+  const baseUrl = getApiBaseUrl();
+  const res = await fetch(`${baseUrl}/api/v1/watchlist`);
+  return handleResponse<WatchlistItem[]>(res);
+}
+
+/**
+ * Add package to watchlist.
+ * POST /api/v1/watchlist
+ */
+export async function addToWatchlist(req: {
+  ecosystem: Ecosystem;
+  package_name: string;
+  notes?: string;
+}): Promise<WatchlistItem> {
+  const baseUrl = getApiBaseUrl();
+  const res = await fetch(`${baseUrl}/api/v1/watchlist`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(req),
+  });
+  return handleResponse<WatchlistItem>(res);
+}
+
+/**
+ * Remove package from watchlist.
+ * DELETE /api/v1/watchlist/{entry_id}
+ */
+export async function removeFromWatchlist(entryId: string): Promise<void> {
+  const baseUrl = getApiBaseUrl();
+  const res = await fetch(`${baseUrl}/api/v1/watchlist/${encodeURIComponent(entryId)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok && res.status !== 404) {
+    throw new ApiError(`Failed to remove watchlist entry: ${res.statusText}`, res.status);
+  }
+}
+
+/**
+ * Trigger on-demand rate-limited checks for newly published versions.
+ * POST /api/v1/watchlist/check
+ */
+export async function checkWatchlistUpdates(): Promise<WatchlistCheckResponse> {
+  const baseUrl = getApiBaseUrl();
+  const res = await fetch(`${baseUrl}/api/v1/watchlist/check`, {
+    method: "POST",
+  });
+  return handleResponse<WatchlistCheckResponse>(res);
+}
+
+/**
+ * Get status of background release monitoring worker.
+ * GET /api/v1/watchlist/monitoring-status
+ */
+export async function getMonitoringStatus(): Promise<MonitoringStatusResponse> {
+  const baseUrl = getApiBaseUrl();
+  const res = await fetch(`${baseUrl}/api/v1/watchlist/monitoring-status`);
+  return handleResponse<MonitoringStatusResponse>(res);
 }
 
 /**

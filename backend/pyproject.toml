@@ -15,6 +15,7 @@ dependencies = [
     "packaging>=24",
     "psycopg[binary]>=3.1,<4",
     "pydantic-settings>=2.5,<3",
+    "reportlab>=4.0,<6",
     "sigstore>=4,<5",
     "sqlalchemy>=2.0,<3",
     "tree-sitter>=0.25,<1",
@@ -55,3 +56,15 @@ select = ["E", "F", "I", "B", "UP", "S"]
 python_version = "3.12"
 strict = true
 files = ["app", "tests"]
+
+[[tool.mypy.overrides]]
+module = ["reportlab.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+check_untyped_defs = false
+disallow_any_generics = false
+warn_unused_ignores = false

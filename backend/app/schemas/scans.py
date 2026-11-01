@@ -177,3 +177,45 @@ class ScanReportResponse(BaseModel):
     completed_at: datetime | None = None
     duration_seconds: float | None = None
     error: str | None = None
+
+
+class RiskChangeSummary(BaseModel):
+    base_score: int | None = None
+    head_score: int | None = None
+    score_delta: int = 0
+    base_level: str | None = None
+    head_level: str | None = None
+    is_elevated: bool = False
+
+
+class FileChangesSummary(BaseModel):
+    newly_added: list[str] = []
+    newly_removed: list[str] = []
+    newly_modified: list[str] = []
+    new_suspicious_artifacts: list[str] = []
+
+
+class FindingChangesSummary(BaseModel):
+    new_findings: list[dict[str, Any]] = []
+    resolved_findings: list[dict[str, Any]] = []
+    persistent_findings_count: int = 0
+
+
+class ProvenanceChangeSummary(BaseModel):
+    base_status: str | None = None
+    head_status: str | None = None
+    is_downgraded: bool = False
+
+
+class ReleaseComparisonResponse(BaseModel):
+    ecosystem: Ecosystem
+    package_name: str
+    base_version: str
+    head_version: str
+    base_scan_id: UUID | None = None
+    head_scan_id: UUID
+    risk_change: RiskChangeSummary
+    file_changes: FileChangesSummary
+    finding_changes: FindingChangesSummary
+    provenance_change: ProvenanceChangeSummary
+    summary: str

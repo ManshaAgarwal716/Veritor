@@ -7,13 +7,25 @@ import {
   Trash2,
   Search,
   Plus,
+  RefreshCw,
+  Sparkles,
+  AlertTriangle,
+  CheckCircle2,
 } from "lucide-react";
-import { addToWatchlist, removeFromWatchlist } from "../lib/storage";
+import {
+  addToWatchlist as apiAddToWatchlist,
+  checkWatchlistUpdates,
+  removeFromWatchlist as apiRemoveFromWatchlist,
+} from "../lib/api";
+import {
+  addToWatchlist as storageAddToWatchlist,
+  removeFromWatchlist as storageRemoveFromWatchlist,
+} from "../lib/storage";
 import { Ecosystem, WatchlistItem } from "../lib/types";
 
 interface WatchlistViewProps {
   watchlist: WatchlistItem[];
-  onTriggerScan: (ecosystem: Ecosystem, packageName: string) => void;
+  onTriggerScan: (ecosystem: Ecosystem, packageName: string, version?: string) => void;
   onRefresh: () => void;
 }
 
@@ -26,8 +38,10 @@ export function WatchlistView({
   const [newPackage, setNewPackage] = useState("");
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [isChecking, setIsChecking] = useState(false);
+  const [checkMessage, setCheckMessage] = useState<string | null>(null);
 
-  function handleAdd(e: React.FormEvent) {
+  async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
     const pkg = newPackage.trim();
     if (!pkg) {
@@ -35,30 +49,76 @@ export function WatchlistView({
       return;
     }
     setError(null);
-    addToWatchlist({
-      ecosystem: newEcosystem,
-      package_name: pkg,
-      notes: notes.trim() || undefined,
-    });
+    try {
+      await apiAddToWatchlist({
+        ecosystem: newEcosystem,
+        package_name: pkg,
+        notes: notes.trim() || undefined,
+      });
+    } catch {
+      // Fallback to storage
+      storageAddToWatchlist({
+        ecosystem: newEcosystem,
+        package_name: pkg,
+        notes: notes.trim() || undefined,
+      });
+    }
     setNewPackage("");
     setNotes("");
     onRefresh();
   }
 
-  function handleRemove(id: string) {
-    removeFromWatchlist(id);
+  async function handleRemove(id: string) {
+    try {
+      await apiRemoveFromWatchlist(id);
+    } catch {
+      // Ignore if offline
+    }
+    storageRemoveFromWatchlist(id);
     onRefresh();
   }
 
+  async function handleCheckUpdates() {
+    setIsChecking(true);
+    setCheckMessage(null);
+    try {
+      const res = await checkWatchlistUpdates();
+      setCheckMessage(
+        `Checked ${res.checked_count} packages: ${res.updates_detected} update(s) detected, ${res.scans_triggered} scan(s) triggered.`
+      );
+      onRefresh();
+    } catch (err) {
+      setCheckMessage(`Check failed: ${String(err)}`);
+    } finally {
+      setIsChecking(false);
+    }
+  }
+
   return (
-    <div className="w-full max-w-4xl mx-auto my-6 p-6 rounded-xl bg-slate-900/90 border border-slate-800 shadow-xl space-y-6 font-mono text-xs">
+    <div className="w-full max-w-5xl mx-auto my-6 p-6 rounded-xl bg-slate-900/90 border border-slate-800 shadow-xl space-y-6 font-mono text-xs">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
         <div className="flex items-center gap-2.5">
           <Bookmark className="w-5 h-5 text-amber-400" />
-          <h2 className="text-base font-bold text-slate-100">Package Watchlist</h2>
+          <h2 className="text-base font-bold text-slate-100">Package Watchlist &amp; Release Monitor</h2>
           <span className="text-slate-500">({watchlist.length} monitored)</span>
         </div>
+
+        <button
+          onClick={handleCheckUpdates}
+          disabled={isChecking || watchlist.length === 0}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-600/20 hover:bg-sky-600/30 border border-sky-500/40 text-sky-300 text-xs font-semibold transition-colors disabled:opacity-50"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${isChecking ? "animate-spin" : ""}`} />
+          <span>{isChecking ? "Checking Registries..." : "Check for Updates"}</span>
+        </button>
       </div>
+
+      {checkMessage && (
+        <div className="p-3 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-sky-400 shrink-0" />
+          <span>{checkMessage}</span>
+        </div>
+      )}
 
       {/* Add New Package Form */}
       <form onSubmit={handleAdd} className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
@@ -84,7 +144,7 @@ export function WatchlistView({
               type="text"
               value={newPackage}
               onChange={(e) => setNewPackage(e.target.value)}
-              placeholder="Package name (e.g. @types/node, requests)"
+              placeholder="Package name (e.g. lodash, requests)"
               className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-200 text-xs placeholder-slate-500 focus:outline-none focus:border-amber-500"
               required
             />
@@ -112,7 +172,8 @@ export function WatchlistView({
               <tr className="border-b border-slate-800 text-slate-400 text-[11px] uppercase">
                 <th className="py-2.5 px-3 font-semibold">Package</th>
                 <th className="py-2.5 px-3 font-semibold">Ecosystem</th>
-                <th className="py-2.5 px-3 font-semibold">Last Checked</th>
+                <th className="py-2.5 px-3 font-semibold">Last Scanned</th>
+                <th className="py-2.5 px-3 font-semibold">Latest Release</th>
                 <th className="py-2.5 px-3 font-semibold">Risk Level</th>
                 <th className="py-2.5 px-3 font-semibold text-right">Actions</th>
               </tr>
@@ -120,11 +181,12 @@ export function WatchlistView({
             <tbody className="divide-y divide-slate-800/60">
               {watchlist.map((item) => (
                 <tr key={item.id} className="hover:bg-slate-800/40 transition-colors">
-                  <td className="py-3 px-3 font-bold text-slate-200">
-                    {item.package_name}
+                  <td className="py-3 px-3">
+                    <div className="font-bold text-slate-200">{item.package_name}</div>
+                    {item.notes && <div className="text-[10px] text-slate-500 truncate max-w-xs">{item.notes}</div>}
                   </td>
                   <td className="py-3 px-3">
-                    <span className="px-2 py-0.5 rounded text-[10px] bg-slate-800 text-slate-300 border border-slate-700">
+                    <span className="px-2 py-0.5 rounded text-[10px] bg-slate-800 text-slate-300 border border-slate-700 uppercase">
                       {item.ecosystem}
                     </span>
                   </td>
@@ -132,13 +194,28 @@ export function WatchlistView({
                     {item.last_scanned_version ? (
                       <span>v{item.last_scanned_version}</span>
                     ) : (
-                      <span className="text-slate-600">Never</span>
+                      <span className="text-slate-600">Not scanned</span>
+                    )}
+                  </td>
+                  <td className="py-3 px-3 text-[11px]">
+                    {item.has_update ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                        <AlertTriangle className="w-3 h-3 text-amber-400" />
+                        v{item.latest_version} (Update)
+                      </span>
+                    ) : item.latest_version ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                        v{item.latest_version} (Latest)
+                      </span>
+                    ) : (
+                      <span className="text-slate-600">—</span>
                     )}
                   </td>
                   <td className="py-3 px-3">
                     {item.last_risk_score !== undefined && item.last_risk_score !== null ? (
                       <span className="px-2 py-0.5 rounded text-[10px] bg-slate-800 text-slate-300 border border-slate-700">
-                        {item.last_risk_score}/100 ({item.last_risk_level})
+                        {item.last_risk_score}/100 ({String(item.last_risk_level || "UNKNOWN")})
                       </span>
                     ) : (
                       <span className="text-slate-600">—</span>
@@ -147,7 +224,13 @@ export function WatchlistView({
                   <td className="py-3 px-3 text-right">
                     <div className="flex items-center justify-end gap-2">
                       <button
-                        onClick={() => onTriggerScan(item.ecosystem, item.package_name)}
+                        onClick={() =>
+                          onTriggerScan(
+                            item.ecosystem,
+                            item.package_name,
+                            item.has_update ? (item.latest_version ?? undefined) : (item.last_scanned_version ?? undefined)
+                          )
+                        }
                         className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-emerald-400 text-[11px] transition-colors"
                         title="Scan package now"
                       >
@@ -173,7 +256,7 @@ export function WatchlistView({
           <Bookmark className="w-8 h-8 mx-auto text-slate-600" />
           <h3 className="text-slate-300 font-bold text-sm">Watchlist is Empty</h3>
           <p className="text-xs text-slate-400 max-w-sm mx-auto">
-            Add critical upstream dependencies to track release updates and quickly trigger integrity scans.
+            Add critical upstream dependencies to monitor new releases, highlight differences, and trigger automated scans.
           </p>
         </div>
       )}

@@ -269,11 +269,73 @@ export interface WatchlistItem {
   id: string;
   ecosystem: Ecosystem;
   package_name: string;
-  added_at: string;
+  added_at?: string;
+  created_at?: string;
   notes?: string;
   last_scanned_version?: string;
   last_risk_score?: number | null;
-  last_risk_level?: RiskLevel | null;
+  last_risk_level?: RiskLevel | string | null;
+  latest_version?: string | null;
+  has_update?: boolean;
+  last_checked_at?: string | null;
+  diff_summary?: ReleaseComparisonResponse | null;
+}
+
+export interface RiskChangeSummary {
+  base_score?: number | null;
+  head_score?: number | null;
+  score_delta: number;
+  base_level?: string | null;
+  head_level?: string | null;
+  is_elevated: boolean;
+}
+
+export interface FileChangesSummary {
+  newly_added: string[];
+  newly_removed: string[];
+  newly_modified: string[];
+  new_suspicious_artifacts: string[];
+}
+
+export interface FindingChangesSummary {
+  new_findings: Record<string, unknown>[];
+  resolved_findings: Record<string, unknown>[];
+  persistent_findings_count: number;
+}
+
+export interface ProvenanceChangeSummary {
+  base_status?: string | null;
+  head_status?: string | null;
+  is_downgraded: boolean;
+}
+
+export interface ReleaseComparisonResponse {
+  ecosystem: Ecosystem;
+  package_name: string;
+  base_version: string;
+  head_version: string;
+  base_scan_id?: string | null;
+  head_scan_id: string;
+  risk_change: RiskChangeSummary;
+  file_changes: FileChangesSummary;
+  finding_changes: FindingChangesSummary;
+  provenance_change: ProvenanceChangeSummary;
+  summary: string;
+}
+
+export interface WatchlistCheckResponse {
+  checked_count: number;
+  updates_detected: number;
+  scans_triggered: number;
+  details: Record<string, unknown>[];
+}
+
+export interface MonitoringStatusResponse {
+  is_running: boolean;
+  interval_seconds: number;
+  monitored_packages_count: number;
+  last_check_timestamp?: string | null;
+  last_check_results?: Record<string, unknown> | null;
 }
 
 export interface HealthCheckResponse {

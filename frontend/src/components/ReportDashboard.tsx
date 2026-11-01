@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   ShieldCheck,
   Download,
@@ -10,8 +10,14 @@ import {
   GitBranch,
   CheckCircle2,
   AlertOctagon,
+  FileText,
+  TrendingUp,
+  TrendingDown,
+  ArrowRight,
+  AlertTriangle,
 } from "lucide-react";
-import { RiskLevel, ScanReportResponse } from "../lib/types";
+import { ReleaseComparisonResponse, RiskLevel, ScanReportResponse } from "../lib/types";
+import { compareScanWithPrevious, exportScanJson, exportScanPdf } from "../lib/api";
 
 interface ReportDashboardProps {
   report: ScanReportResponse;
@@ -73,17 +79,75 @@ export function ReportDashboard({
 
   const colors = getRiskColor(level);
 
-  function exportReportJson() {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(report, null, 2));
-    const downloadAnchor = document.createElement("a");
-    downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute(
-      "download",
-      `veritor-${report.package_name}-${report.version}-${report.scan_id}.json`
-    );
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
+  const [exportingJson, setExportingJson] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
+  const [comparisonData, setComparisonData] = useState<ReleaseComparisonResponse | null>(null);
+  const [loadingComparison, setLoadingComparison] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    setLoadingComparison(true);
+    compareScanWithPrevious(report.scan_id)
+      .then((data) => {
+        if (active) setComparisonData(data);
+      })
+      .catch(() => {
+        if (active) setComparisonData(null);
+      })
+      .finally(() => {
+        if (active) setLoadingComparison(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [report.scan_id]);
+
+  async function handleExportJson() {
+    try {
+      setExportingJson(true);
+      const blob = await exportScanJson(report.scan_id);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `veritor-report-${report.ecosystem}-${report.package_name}-${report.version}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      // Fallback in-browser export
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(report, null, 2));
+      const downloadAnchor = document.createElement("a");
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute(
+        "download",
+        `veritor-${report.package_name}-${report.version}-${report.scan_id}.json`
+      );
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+    } finally {
+      setExportingJson(false);
+    }
+  }
+
+  async function handleExportPdf() {
+    try {
+      setExportingPdf(true);
+      const blob = await exportScanPdf(report.scan_id);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `veritor-report-${report.ecosystem}-${report.package_name}-${report.version}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      alert("Failed to export PDF report: " + String(err));
+    } finally {
+      setExportingPdf(false);
+    }
   }
 
   return (
@@ -133,13 +197,22 @@ export function ReportDashboard({
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
-              onClick={exportReportJson}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-mono text-slate-300 transition-colors"
+              onClick={handleExportJson}
+              disabled={exportingJson}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-mono text-slate-300 transition-colors disabled:opacity-50"
             >
               <Download className="w-3.5 h-3.5 text-slate-400" />
-              <span>Export JSON</span>
+              <span>{exportingJson ? "Exporting..." : "Export JSON"}</span>
+            </button>
+            <button
+              onClick={handleExportPdf}
+              disabled={exportingPdf}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-xs font-mono text-emerald-300 transition-colors disabled:opacity-50"
+            >
+              <FileText className="w-3.5 h-3.5 text-emerald-400" />
+              <span>{exportingPdf ? "Generating PDF..." : "Export PDF"}</span>
             </button>
           </div>
         </div>
@@ -313,6 +386,69 @@ export function ReportDashboard({
               </div>
             </div>
           </div>
+
+          {/* Release Comparison / Evolution Card (when previous release exists) */}
+          {comparisonData && comparisonData.base_version !== "none" && (
+            <div className="p-5 rounded-xl bg-slate-900/90 border border-slate-800 space-y-3">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <GitBranch className="w-4 h-4 text-sky-400" />
+                  <h3 className="font-mono text-sm font-semibold text-slate-200">
+                    Release Evolution: {comparisonData.base_version} → {comparisonData.head_version}
+                  </h3>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`inline-flex items-center gap-1 text-xs font-mono px-2.5 py-0.5 rounded-full border ${
+                      comparisonData.risk_change.is_elevated
+                        ? "bg-rose-500/20 text-rose-300 border-rose-500/30"
+                        : comparisonData.risk_change.score_delta < 0
+                        ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+                        : "bg-slate-800 text-slate-400 border-slate-700"
+                    }`}
+                  >
+                    {comparisonData.risk_change.score_delta > 0 ? (
+                      <TrendingUp className="w-3.5 h-3.5" />
+                    ) : comparisonData.risk_change.score_delta < 0 ? (
+                      <TrendingDown className="w-3.5 h-3.5" />
+                    ) : null}
+                    Risk: {comparisonData.risk_change.score_delta > 0 ? `+${comparisonData.risk_change.score_delta}` : comparisonData.risk_change.score_delta} pts ({comparisonData.risk_change.base_score ?? 0} → {comparisonData.risk_change.head_score ?? 0})
+                  </span>
+                </div>
+              </div>
+
+              <p className="text-xs font-mono text-slate-300 leading-relaxed">
+                {comparisonData.summary}
+              </p>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 text-xs font-mono">
+                <div className="p-2.5 rounded-lg bg-slate-800/60 border border-slate-700/50">
+                  <span className="text-slate-400 block">Newly Added</span>
+                  <span className="text-base font-bold text-emerald-400">
+                    +{comparisonData.file_changes.newly_added.length}
+                  </span>
+                </div>
+                <div className="p-2.5 rounded-lg bg-slate-800/60 border border-slate-700/50">
+                  <span className="text-slate-400 block">Newly Modified</span>
+                  <span className="text-base font-bold text-amber-400">
+                    ~{comparisonData.file_changes.newly_modified.length}
+                  </span>
+                </div>
+                <div className="p-2.5 rounded-lg bg-slate-800/60 border border-slate-700/50">
+                  <span className="text-slate-400 block">New Findings</span>
+                  <span className={`text-base font-bold ${comparisonData.finding_changes.new_findings.length > 0 ? "text-rose-400" : "text-slate-400"}`}>
+                    {comparisonData.finding_changes.new_findings.length}
+                  </span>
+                </div>
+                <div className="p-2.5 rounded-lg bg-slate-800/60 border border-slate-700/50">
+                  <span className="text-slate-400 block">Suspicious Artifacts</span>
+                  <span className={`text-base font-bold ${comparisonData.file_changes.new_suspicious_artifacts.length > 0 ? "text-rose-400" : "text-emerald-400"}`}>
+                    {comparisonData.file_changes.new_suspicious_artifacts.length}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Hard Floors Notice (if triggered) */}
           {risk?.floors && risk.floors.some((f) => f.triggered) && (

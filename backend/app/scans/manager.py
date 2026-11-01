@@ -16,8 +16,10 @@ from app.adapters.pypi import PyPIAdapter
 from app.ai.client import OllamaClient
 from app.ai.investigator import AIInvestigator
 from app.config import Settings, get_settings
+from app.db import models
 from app.db.repository import ScanRepository
 from app.db.session import get_session_factory
+from app.monitoring.comparator import compare_releases
 from app.provenance.npm import NpmProvenanceChecker
 from app.provenance.pypi import PyPIProvenanceChecker
 from app.scans.models import ScanRecord
@@ -25,6 +27,7 @@ from app.scans.pipeline import execute_scan_pipeline
 from app.schemas.scans import (
     Ecosystem,
     FileDiffItem,
+    ReleaseComparisonResponse,
     ScanDiffsResponse,
     ScanFilesResponse,
     ScanFindingsResponse,
@@ -575,6 +578,59 @@ class ScanManager:
 
         raise ScanNotFoundError(f"File {file_id!r} not found in scan comparison")
 
+    def get_previous_scan_id(self, scan_id: UUID) -> UUID | None:
+        """Find the UUID of the previous completed scan for the same package."""
+        head_record = self.get_scan(scan_id)
+        if not head_record:
+            return None
+
+        # Check database first
+        if self._session_factory:
+            try:
+                with self._session_factory() as session:
+                    repo = self._get_repo(session)
+                    prev_scan = repo.get_previous_completed_scan(
+                        ecosystem=head_record.ecosystem.value,
+                        package_name=head_record.package_name,
+                        exclude_scan_id=scan_id,
+                        exclude_version=head_record.version,
+                    )
+                    if prev_scan:
+                        return prev_scan.id
+            except Exception as exc:
+                logger.warning("Error fetching previous scan from DB: %s", exc)
+
+        # Fallback to in-memory scans
+        candidates = [
+            r
+            for r in self._scans.values()
+            if r.scan_id != scan_id
+            and r.ecosystem == head_record.ecosystem
+            and r.package_name == head_record.package_name
+            and r.version != head_record.version
+            and r.status == ScanState.COMPLETED
+        ]
+        if candidates:
+            candidates.sort(key=lambda c: c.created_at, reverse=True)
+            return candidates[0].scan_id
+
+        return None
+
+    def compare_scan_with_previous(self, scan_id: UUID) -> ReleaseComparisonResponse:
+        """Compare a scan report with the previous completed scan of the package."""
+        head_report = self.get_report(scan_id)
+        prev_scan_id = self.get_previous_scan_id(scan_id)
+        base_report = self.get_report(prev_scan_id) if prev_scan_id else None
+        return compare_releases(head_report, base_report)
+
+    def compare_two_scans(
+        self, head_scan_id: UUID, base_scan_id: UUID | None = None
+    ) -> ReleaseComparisonResponse:
+        """Compare any two completed scans."""
+        head_report = self.get_report(head_scan_id)
+        base_report = self.get_report(base_scan_id) if base_scan_id else None
+        return compare_releases(head_report, base_report)
+
     # Watchlist Management
     def get_watchlist(self) -> list[dict[str, Any]]:
         """Retrieve watchlist entries from DB or memory."""
@@ -592,6 +648,12 @@ class ScanManager:
                             "last_scanned_version": e.last_scanned_version,
                             "last_risk_score": e.last_risk_score,
                             "last_risk_level": e.last_risk_level,
+                            "latest_version": e.latest_version,
+                            "has_update": e.has_update,
+                            "last_checked_at": (
+                                e.last_checked_at.isoformat() if e.last_checked_at else None
+                            ),
+                            "diff_summary": e.diff_summary_json,
                             "created_at": e.created_at.isoformat() if e.created_at else None,
                         }
                         for e in entries
@@ -611,6 +673,13 @@ class ScanManager:
             "ecosystem": ecosystem,
             "package_name": package_name,
             "notes": notes,
+            "last_scanned_version": None,
+            "last_risk_score": None,
+            "last_risk_level": None,
+            "latest_version": None,
+            "has_update": False,
+            "last_checked_at": None,
+            "diff_summary": None,
             "created_at": datetime.now(UTC).isoformat(),
         }
 
@@ -619,10 +688,38 @@ class ScanManager:
                 with self._session_factory() as session:
                     repo = self._get_repo(session)
                     e = repo.add_watchlist_entry(ecosystem, package_name, notes)
+
+                    # Check if there is already a completed scan for this package
+                    latest_scan = (
+                        session.query(models.Scan)
+                        .filter(
+                            models.Scan.ecosystem == ecosystem,
+                            models.Scan.package_name == package_name,
+                            models.Scan.status == ScanState.COMPLETED.value,
+                        )
+                        .order_by(models.Scan.created_at.desc())
+                        .first()
+                    )
+                    if latest_scan:
+                        e.last_scanned_version = latest_scan.version
+                        item["last_scanned_version"] = latest_scan.version
+                        rep = repo.get_report(latest_scan.id)
+                        if rep and rep.risk:
+                            r_dict = (
+                                rep.risk if isinstance(rep.risk, dict) else rep.risk.model_dump()
+                            )
+                            e.last_risk_score = r_dict.get("score")
+                            e.last_risk_level = r_dict.get("level")
+                            item["last_risk_score"] = e.last_risk_score
+                            item["last_risk_level"] = e.last_risk_level
+
                     session.commit()
                     item["created_at"] = (
                         e.created_at.isoformat() if e.created_at else item["created_at"]
                     )
+                    item["latest_version"] = e.latest_version
+                    item["has_update"] = e.has_update
+                    item["diff_summary"] = e.diff_summary_json
                     return item
             except Exception as exc:
                 logger.warning("Error saving watchlist entry to DB: %s", exc)
