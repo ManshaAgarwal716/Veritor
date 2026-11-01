@@ -138,7 +138,24 @@ findings, file inventory, and diff endpoints.
   11. **Settings & Infrastructure**: Backend API URL configuration, live FastAPI `/health` status, and local Ollama connection test showing available models (`qwen2.5-coder:7b`, `phi4-mini`).
 - Verified with ESLint (0 errors, 0 warnings), TypeScript (`next typegen && tsc --noEmit`), automated tests (`node --test`), and production build (`next build --webpack`).
 
-### Phase 8: Validation and Demo (next)
+### Phase 8: Persistence & PyPI Ecosystem Support (done)
+
+- **Database Persistence**:
+  - PostgreSQL backing with SQLAlchemy 2.0 style ORM models and Alembic database migrations.
+  - Complete entity schemas: `packages`, `package_versions`, `scans`, `scan_reports`, `file_comparisons`, `security_findings`, `provenance_results`, `ai_explanations`, and `watchlist_entries`.
+  - `ScanRepository` providing clean persistence and reopening of historical scans, reports, file diffs, findings, and watchlist items.
+  - Database fallback: seamless graceful fallback to memory when database credentials are not configured, preserving 100% offline and standalone capability.
+  - REST endpoints for watchlist management (`GET`, `POST`, `DELETE /api/v1/watchlist`).
+  - Docker Compose service definition for PostgreSQL 16 container with persistent volumes and healthchecks.
+- **PyPI Ecosystem Support**:
+  - `PyPIAdapter` querying the official PyPI JSON API with exact PEP 440 version resolution.
+  - Prioritized release artifact download for source distributions (`.tar.gz`) and binary wheels (`.whl`), verifying integrity against registry SHA-256 digests and domain enforcement (`files.pythonhosted.org`).
+  - PEP 508 dependency parsing and upstream GitHub / GitLab source repository discovery.
+  - Safe extraction for `.whl` and `.zip` archives with path traversal prevention, anti-zip-bomb compression ratio limits, entry depth/size enforcement, and safe 0600 file permissions.
+  - PyPI PEP 740 Sigstore digital attestation provenance checker (`PyPIProvenanceChecker`) returning `VERIFIED`, `NOT_VERIFIED`, `UNAVAILABLE`, `INVALID`, or `UNCERTAIN`.
+  - Unified pipeline integration: PyPI packages reuse the exact same inventory comparison, artifact classification, AST security scanning, risk heuristic engine, and AI investigator without duplicating business logic.
+
+### Phase 9: Validation and Demo (next)
 
 - Fixture package tests: clean packages, packages with benign build differences,
   and packages with injected suspicious patterns.

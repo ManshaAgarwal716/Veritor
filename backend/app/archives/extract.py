@@ -20,6 +20,7 @@ import shutil
 import stat
 import tarfile
 import time
+import zipfile
 import zlib
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -227,7 +228,165 @@ def _inspect_archive(archive: Path, limits: ExtractionLimits) -> tuple[int, str]
     return details.st_size, hasher.hexdigest()
 
 
+def _is_zip_archive(archive: Path) -> bool:
+    try:
+        with archive.open("rb") as f:
+            header = f.read(4)
+            return header.startswith(b"PK\x03\x04") or archive.name.endswith((".whl", ".zip"))
+    except OSError:
+        return False
+
+
+def _extract_zip_entries(
+    archive: Path, archive_size: int, destination: Path, limits: ExtractionLimits
+) -> tuple[str | None, list[InventoryEntry], int]:
+    entries: list[InventoryEntry] = []
+    layout = _Layout()
+    total_bytes = 0
+    count = 0
+    deadline = time.monotonic() + limits.deadline_seconds
+
+    try:
+        with zipfile.ZipFile(archive, "r") as zf:
+            infolist = zf.infolist()
+            if len(infolist) > limits.max_entries:
+                raise ArchiveLimitExceededError(
+                    f"Archive has more than {limits.max_entries} entries"
+                )
+
+            # Check if all entries share a single common root folder
+            common_root: str | None = None
+            first_segments = [
+                _safe_segments(info.filename, limits)
+                for info in infolist
+                if info.filename.strip("/")
+            ]
+            if (
+                first_segments
+                and all(s[0] == first_segments[0][0] for s in first_segments)
+                and any(len(s) > 1 for s in first_segments)
+            ):
+                common_root = first_segments[0][0]
+
+            for info in infolist:
+                if time.monotonic() > deadline:
+                    raise ArchiveLimitExceededError("Extraction deadline exceeded")
+                count += 1
+                if count > limits.max_entries:
+                    raise ArchiveLimitExceededError(
+                        f"Archive has more than {limits.max_entries} entries"
+                    )
+
+                clean_name = info.filename
+                if not clean_name.strip("/"):
+                    continue
+
+                segments = _safe_segments(clean_name, limits)
+                if not segments:
+                    continue
+
+                if common_root and segments[0] == common_root:
+                    relative = segments[1:]
+                else:
+                    relative = segments
+
+                if not relative:
+                    continue
+
+                layout.add_parents(relative)
+                if info.is_dir() or clean_name.endswith("/"):
+                    layout.add_directory(relative)
+                    continue
+                layout.add_non_directory(relative)
+
+                # Compression ratio check
+                if (
+                    info.compress_size > 0
+                    and info.file_size > 1024 * 1024
+                    and (info.file_size / info.compress_size) > limits.max_compression_ratio
+                ):
+                    raise ArchiveLimitExceededError(
+                        f"Compression ratio exceeds {limits.max_compression_ratio}"
+                    )
+
+                if info.file_size > limits.max_file_bytes:
+                    raise ArchiveLimitExceededError(
+                        f"File exceeds {limits.max_file_bytes} bytes: {clean_name!r}"
+                    )
+                if total_bytes + info.file_size > limits.max_total_bytes:
+                    raise ArchiveLimitExceededError(f"Files exceed {limits.max_total_bytes} bytes")
+
+                # Extract regular file safely
+                target = destination.joinpath(*relative)
+                target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+                hasher = hashlib.sha256()
+                size = 0
+                sniffed = b""
+
+                try:
+                    descriptor = os.open(target, _CREATE_FLAGS, 0o600)
+                except FileExistsError as exc:
+                    raise UnsafeArchiveError(
+                        f"Entry collides with another on this disk: {clean_name!r}"
+                    ) from exc
+                except (IsADirectoryError, NotADirectoryError) as exc:
+                    raise UnsafeArchiveError(
+                        f"Entry conflicts with another on this disk: {clean_name!r}"
+                    ) from exc
+
+                with os.fdopen(descriptor, "wb") as output:
+                    with zf.open(info, "r") as source:
+                        while chunk := source.read(CHUNK_SIZE):
+                            if time.monotonic() > deadline:
+                                raise ArchiveLimitExceededError("Extraction deadline exceeded")
+                            size += len(chunk)
+                            if size > limits.max_file_bytes:
+                                raise ArchiveLimitExceededError(
+                                    f"File exceeds {limits.max_file_bytes} bytes: {clean_name!r}"
+                                )
+                            if not sniffed:
+                                sniffed = chunk[:SNIFF_SIZE]
+                            hasher.update(chunk)
+                            output.write(chunk)
+
+                if size != info.file_size:
+                    raise InvalidArchiveError(
+                        f"Entry is shorter than its header declares: {clean_name!r}"
+                    )
+
+                total_bytes += size
+                path_str = "/".join(relative)
+                entries.append(
+                    InventoryEntry(
+                        path=path_str,
+                        extension=PurePosixPath(path_str).suffix.lower(),
+                        kind=EntryKind.REGULAR,
+                        size_bytes=size,
+                        sha256=hasher.hexdigest(),
+                        content_type=_detect_content_type(sniffed),
+                        mode="0600",
+                        is_executable=False,
+                    )
+                )
+
+        return common_root, entries, total_bytes
+    except ExtractionError:
+        raise
+    except (zipfile.BadZipFile, EOFError, zlib.error) as exc:
+        raise InvalidArchiveError(f"Archive is corrupt or truncated: {exc}") from exc
+    except OSError as exc:
+        raise ExtractionStorageError(f"Could not write extracted files: {exc}") from exc
+
+
 def _extract_entries(
+    archive: Path, archive_size: int, destination: Path, limits: ExtractionLimits
+) -> tuple[str | None, list[InventoryEntry], int]:
+    if _is_zip_archive(archive):
+        return _extract_zip_entries(archive, archive_size, destination, limits)
+    return _extract_tar_entries(archive, archive_size, destination, limits)
+
+
+def _extract_tar_entries(
     archive: Path, archive_size: int, destination: Path, limits: ExtractionLimits
 ) -> tuple[str | None, list[InventoryEntry], int]:
     entries: list[InventoryEntry] = []

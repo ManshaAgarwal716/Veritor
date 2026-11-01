@@ -6,6 +6,7 @@ import shutil
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 from uuid import UUID
 
 from app.adapters.base import PackageAdapter
@@ -16,6 +17,7 @@ from app.archives.extract import ExtractionLimits, extract_archive
 from app.comparison.compare import compare_inventories
 from app.comparison.models import ComparisonLimits, ComparisonReport
 from app.provenance.npm import NpmProvenanceChecker
+from app.provenance.pypi import PyPIProvenanceChecker
 from app.schemas.scans import (
     Ecosystem,
     ScanReportResponse,
@@ -39,7 +41,7 @@ async def execute_scan_pipeline(
     work_dir: Path,
     adapter: PackageAdapter,
     resolver: GitHubSourceResolver,
-    provenance_checker: NpmProvenanceChecker,
+    provenance_checker: NpmProvenanceChecker | PyPIProvenanceChecker | Any,
     ai_investigator: AIInvestigator,
     on_progress: ProgressCallback | None = None,
     extraction_limits: ExtractionLimits | None = None,
