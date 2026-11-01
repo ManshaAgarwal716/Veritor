@@ -385,8 +385,8 @@ export default function Home() {
         {activeTab === "watchlist" && (
           <WatchlistView
             watchlist={watchlist}
-            onTriggerScan={(ecosystem, pkgName) => {
-              setFormParams({ ecosystem, packageName: pkgName, version: "" });
+            onTriggerScan={(ecosystem, pkgName, ver) => {
+              setFormParams({ ecosystem, packageName: pkgName, version: ver || "" });
               setActiveTab("scanner");
             }}
             onRefresh={() => setWatchlist(getWatchlist())}

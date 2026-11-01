@@ -250,6 +250,10 @@ class WatchlistEntry(Base):
     last_scanned_version: Mapped[str | None] = mapped_column(String(256), nullable=True)
     last_risk_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
     last_risk_level: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    latest_version: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    has_update: Mapped[bool] = mapped_column(Boolean, default=False)
+    last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    diff_summary_json: Mapped[dict[str, Any] | None] = mapped_column(JsonType, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, onupdate=utc_now

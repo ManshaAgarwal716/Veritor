@@ -1,8 +1,12 @@
 import logging
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, status
+from fastapi.responses import JSONResponse, Response
 
+from app.reports.json_exporter import generate_json_report
+from app.reports.pdf_exporter import generate_pdf_report
 from app.scans.manager import (
     ScanNotFoundError,
     ScanNotReadyError,
@@ -11,6 +15,7 @@ from app.scans.manager import (
 from app.schemas.common import ErrorResponse
 from app.schemas.scans import (
     FileDiffItem,
+    ReleaseComparisonResponse,
     ScanDiffsResponse,
     ScanFilesResponse,
     ScanFindingsResponse,
@@ -41,6 +46,24 @@ async def create_scan(request: ScanRequest) -> ScanResponse:
         package_name=record.package_name,
         version=record.version,
     )
+
+
+@router.get(
+    "/compare",
+    response_model=ReleaseComparisonResponse,
+    responses={404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+)
+def compare_releases_by_scan_id(
+    head_scan_id: Annotated[UUID, Query(description="The primary / newer scan ID to compare")],
+    base_scan_id: Annotated[UUID | None, Query(description="The baseline / older scan ID")] = None,
+) -> ReleaseComparisonResponse:
+    """Compare two completed scans to identify newly introduced changes."""
+    try:
+        return get_scan_manager().compare_two_scans(head_scan_id, base_scan_id)
+    except ScanNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ScanNotReadyError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
 
 @router.get(
@@ -121,10 +144,69 @@ def get_scan_file_diff(scan_id: UUID, file_id: str) -> FileDiffItem:
     response_model=ScanDiffsResponse,
     responses={404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
 )
-def get_scan_diffs(scan_id: UUID, path: str | None = Query(default=None)) -> ScanDiffsResponse:
+def get_scan_diffs(
+    scan_id: UUID,
+    path: Annotated[str | None, Query()] = None,
+) -> ScanDiffsResponse:
     """Get file diffs between package and source repository."""
     try:
         return get_scan_manager().get_diffs(scan_id, path=path)
+    except ScanNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ScanNotReadyError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+
+
+@router.get(
+    "/{scan_id}/export/json",
+    responses={404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+)
+def export_scan_json(scan_id: UUID) -> JSONResponse:
+    """Download package integrity report as structured JSON."""
+    try:
+        report = get_scan_manager().get_report(scan_id)
+        data = generate_json_report(report)
+        filename = f"veritor-report-{report.ecosystem}-{report.package_name}-{report.version}.json"
+        return JSONResponse(
+            content=data,
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+    except ScanNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ScanNotReadyError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+
+
+@router.get(
+    "/{scan_id}/export/pdf",
+    responses={404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+)
+def export_scan_pdf(scan_id: UUID) -> Response:
+    """Download package integrity report as a PDF."""
+    try:
+        report = get_scan_manager().get_report(scan_id)
+        pdf_bytes = generate_pdf_report(report)
+        filename = f"veritor-report-{report.ecosystem}-{report.package_name}-{report.version}.pdf"
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+    except ScanNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ScanNotReadyError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+
+
+@router.get(
+    "/{scan_id}/compare-previous",
+    response_model=ReleaseComparisonResponse,
+    responses={404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+)
+def compare_scan_with_previous(scan_id: UUID) -> ReleaseComparisonResponse:
+    """Compare a scan report with the previous completed release of the same package."""
+    try:
+        return get_scan_manager().compare_scan_with_previous(scan_id)
     except ScanNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except ScanNotReadyError as exc:

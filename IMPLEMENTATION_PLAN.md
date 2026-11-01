@@ -155,7 +155,44 @@ findings, file inventory, and diff endpoints.
   - PyPI PEP 740 Sigstore digital attestation provenance checker (`PyPIProvenanceChecker`) returning `VERIFIED`, `NOT_VERIFIED`, `UNAVAILABLE`, `INVALID`, or `UNCERTAIN`.
   - Unified pipeline integration: PyPI packages reuse the exact same inventory comparison, artifact classification, AST security scanning, risk heuristic engine, and AI investigator without duplicating business logic.
 
-### Phase 9: Validation and Demo (next)
+### Phase 9: Release Monitoring & Comprehensive Report Exports (done)
+
+- **Release Monitoring & Version Detection**:
+  - Continuous release monitoring for both npm and PyPI packages in the watchlist.
+  - Version detection engine (`fetch_latest_version`, `is_newer_version`, `check_package_update`) inspecting npm registry `dist-tags.latest` and PyPI JSON API `info.version`.
+  - On-demand updates check (`POST /api/v1/watchlist/check`) and background scheduled monitor with sensible rate limits and request delays.
+  - Automated background scan triggering for newly published versions with status tracking (`GET /api/v1/watchlist/monitoring-status`).
+- **Release-to-Release Differential Comparison**:
+  - `ReleaseComparator` comparing the newest analyzed release against the previous baseline release.
+  - Risk changes tracking: score delta, risk level shifts, and explicit elevated risk warnings.
+  - File changes breakdown: newly added files, newly modified files, newly removed files, and newly introduced suspicious build artifacts.
+  - Security finding evolution: newly introduced security findings, resolved findings, and persistent findings.
+  - Provenance changes: tracks attestation status changes and flags any security downgrades.
+  - Explainable human-readable summary synthesising risk progression and critical changes.
+- **Comprehensive Report Exports**:
+  - **Structured JSON Export** (`GET /api/v1/scans/{scan_id}/export/json`):
+    - Standardized export format with `export_metadata` (schema version, exported timestamp, SHA-256 integrity hash).
+    - Complete package metadata, source repository information, comparison statistics, AST security findings, provenance verification, deterministic risk assessment, and AI investigation explanations.
+  - **Executive PDF Export** (`GET /api/v1/scans/{scan_id}/export/pdf`):
+    - ReportLab PDF document generator producing a clean cybersecurity report.
+    - Color-coded risk score dial, provenance attestation table, source matching summary, file comparison statistics, AST security findings table with evidence snippets, AI behavioral investigation, recommendations, and analysis limitations.
+- **Frontend Integration**:
+  - Report dashboard download buttons for instantaneous 1-click JSON and PDF exports.
+  - "Release Evolution" card displaying release-to-release score deltas, newly added suspicious artifacts, new findings, and file diff summaries.
+  - Watchlist view connected to backend API with live update badges (`NEW RELEASE AVAILABLE`), on-demand check button with animated spinner, and instant scan triggers.
+- **API Endpoints**:
+  - `GET /api/v1/scans/{scan_id}/export/json`: Download package report as structured JSON.
+  - `GET /api/v1/scans/{scan_id}/export/pdf`: Download package report as styled PDF.
+  - `GET /api/v1/scans/{scan_id}/compare-previous`: Compare scan against the immediate prior release.
+  - `GET /api/v1/scans/compare`: Arbitrary two-scan release comparison by ID.
+  - `GET /api/v1/watchlist`: List all monitored packages with update statuses.
+  - `POST /api/v1/watchlist`: Add package to monitored watchlist.
+  - `DELETE /api/v1/watchlist/{entry_id}`: Remove package from watchlist.
+  - `POST /api/v1/watchlist/check`: Trigger on-demand version update check across watchlist.
+  - `GET /api/v1/watchlist/monitoring-status`: Query monitoring background scheduler metrics.
+  - `GET /api/v1/watchlist/{entry_id}/compare`: Get release comparison for a watchlisted package.
+
+### Phase 10: Validation and Demo (next)
 
 - Fixture package tests: clean packages, packages with benign build differences,
   and packages with injected suspicious patterns.

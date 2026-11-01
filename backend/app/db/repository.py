@@ -11,6 +11,7 @@ from app.db import models
 from app.schemas.scans import (
     FileDiffItem,
     ScanReportResponse,
+    ScanState,
 )
 
 logger = logging.getLogger(__name__)
@@ -343,3 +344,44 @@ class ScanRepository:
             self.session.flush()
             return True
         return False
+
+    def get_watchlist_entry(self, entry_id: str) -> models.WatchlistEntry | None:
+        stmt = select(models.WatchlistEntry).where(models.WatchlistEntry.id == entry_id)
+        return self.session.scalars(stmt).first()
+
+    def get_completed_scan_for_version(
+        self, ecosystem: str, package_name: str, version: str
+    ) -> models.Scan | None:
+        """Find the latest completed scan for a given package and version."""
+        stmt = (
+            select(models.Scan)
+            .where(
+                models.Scan.ecosystem == ecosystem,
+                models.Scan.package_name == package_name,
+                models.Scan.version == version,
+                models.Scan.status == ScanState.COMPLETED.value,
+            )
+            .order_by(models.Scan.created_at.desc())
+        )
+        return self.session.scalars(stmt).first()
+
+    def get_previous_completed_scan(
+        self,
+        ecosystem: str,
+        package_name: str,
+        exclude_scan_id: uuid.UUID | None = None,
+        exclude_version: str | None = None,
+    ) -> models.Scan | None:
+        """Find the most recent completed scan for the package prior to this one."""
+        conditions = [
+            models.Scan.ecosystem == ecosystem,
+            models.Scan.package_name == package_name,
+            models.Scan.status == ScanState.COMPLETED.value,
+        ]
+        if exclude_scan_id:
+            conditions.append(models.Scan.id != exclude_scan_id)
+        if exclude_version:
+            conditions.append(models.Scan.version != exclude_version)
+
+        stmt = select(models.Scan).where(*conditions).order_by(models.Scan.created_at.desc())
+        return self.session.scalars(stmt).first()
