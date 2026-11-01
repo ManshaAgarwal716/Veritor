@@ -11,8 +11,11 @@ services:
     environment:
       - VERITOR_LOG_LEVEL=INFO
       - VERITOR_OLLAMA_BASE_URL=http://ollama:11434
+      - VERITOR_DATABASE_URL=postgresql+psycopg://veritor:veritor@postgres:5432/veritor
       - VERITOR_CORS_ORIGINS=["http://localhost:3000","http://127.0.0.1:3000"]
     depends_on:
+      postgres:
+        condition: service_healthy
       ollama:
         condition: service_started
     healthcheck:
@@ -43,6 +46,24 @@ services:
       retries: 3
       start_period: 5s
 
+  postgres:
+    image: postgres:16-alpine
+    container_name: veritor-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=veritor
+      - POSTGRES_PASSWORD=veritor
+      - POSTGRES_DB=veritor
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U veritor -d veritor"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   ollama:
     image: ollama/ollama:latest
     container_name: veritor-ollama
@@ -53,4 +74,5 @@ services:
       - ollama_data:/root/.ollama
 
 volumes:
+  postgres_data:
   ollama_data:

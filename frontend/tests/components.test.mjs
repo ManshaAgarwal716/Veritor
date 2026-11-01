@@ -76,3 +76,4 @@ test("Type declarations cover all backend models and schemas", () => {
   assert.match(content, /export interface SecurityFinding/, "Must define SecurityFinding");
   assert.match(content, /export interface AIInvestigationResult/, "Must define AIInvestigationResult");
 });
+

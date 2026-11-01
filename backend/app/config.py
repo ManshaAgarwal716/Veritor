@@ -22,6 +22,7 @@ class Settings(BaseSettings):
 
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
     cors_origins: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
+    database_url: str | None = None
 
     ollama_base_url: str = "http://127.0.0.1:11434"
     triage_model: str = "phi4-mini"
