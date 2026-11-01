@@ -8,6 +8,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from app.api import health
 from app.api import v1 as api_v1
 from app.config import Settings, get_settings
+from app.db.session import init_db
 from app.errors import register_error_handlers
 from app.logging_config import configure_logging
 from app.middleware import REQUEST_ID_HEADER, request_context
@@ -21,6 +22,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     scan_mgr = get_scan_manager()
     session_factory = getattr(scan_mgr, "_session_factory", None)
     if session_factory:
+        init_db()
         await scheduler.start(session_factory, scan_mgr)
     yield
     scheduler.stop()

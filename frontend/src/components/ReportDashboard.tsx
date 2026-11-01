@@ -13,8 +13,6 @@ import {
   FileText,
   TrendingUp,
   TrendingDown,
-  ArrowRight,
-  AlertTriangle,
 } from "lucide-react";
 import { ReleaseComparisonResponse, RiskLevel, ScanReportResponse } from "../lib/types";
 import { compareScanWithPrevious, exportScanJson, exportScanPdf } from "../lib/api";
@@ -82,21 +80,18 @@ export function ReportDashboard({
   const [exportingJson, setExportingJson] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
   const [comparisonData, setComparisonData] = useState<ReleaseComparisonResponse | null>(null);
-  const [loadingComparison, setLoadingComparison] = useState(false);
 
   useEffect(() => {
     let active = true;
-    setLoadingComparison(true);
-    compareScanWithPrevious(report.scan_id)
-      .then((data) => {
+    async function fetchComparison() {
+      try {
+        const data = await compareScanWithPrevious(report.scan_id);
         if (active) setComparisonData(data);
-      })
-      .catch(() => {
+      } catch {
         if (active) setComparisonData(null);
-      })
-      .finally(() => {
-        if (active) setLoadingComparison(false);
-      });
+      }
+    }
+    fetchComparison();
     return () => {
       active = false;
     };

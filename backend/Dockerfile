@@ -16,8 +16,9 @@ RUN groupadd -g 10001 appgroup && \
 
 WORKDIR /app
 
-# Copy dependency definition and install backend
-COPY pyproject.toml /app/
+# Copy dependency definition, database migrations, and application code
+COPY pyproject.toml alembic.ini /app/
+COPY alembic /app/alembic
 COPY app /app/app
 
 RUN pip install --no-cache-dir .
