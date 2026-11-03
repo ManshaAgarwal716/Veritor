@@ -11,7 +11,11 @@ from app.provenance.npm import (
     VerificationUnavailableError,
     VerifiedBundle,
 )
-from app.provenance.pypi import PyPIProvenanceChecker
+from app.provenance.pypi import (
+    PyPIProvenanceChecker,
+    SigstorePyPIBundleVerifier,
+    dsse_pae,
+)
 
 __all__ = [
     "BundleUnreadableError",
@@ -23,6 +27,8 @@ __all__ = [
     "SignatureInvalidError",
     "SignerIdentity",
     "SigstoreBundleVerifier",
+    "SigstorePyPIBundleVerifier",
     "VerificationUnavailableError",
     "VerifiedBundle",
+    "dsse_pae",
 ]

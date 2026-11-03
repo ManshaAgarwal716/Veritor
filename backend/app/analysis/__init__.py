@@ -14,6 +14,7 @@ from app.analysis.models import (
     SecurityAnalysis,
     Severity,
 )
+from app.analysis.py_scanner import scan_python
 from app.analysis.rules import RULES, Rule
 from app.analysis.service import ReleaseAnalysis, analyze_release
 
@@ -35,6 +36,7 @@ __all__ = [
     "analyze_package",
     "analyze_release",
     "check_lifecycle",
+    "scan_python",
     "scan_source",
     "scannable_language",
 ]
