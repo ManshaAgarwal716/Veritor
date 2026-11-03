@@ -184,9 +184,7 @@ class _PythonVisitor(ast.NodeVisitor):
         elif isinstance(node, ast.JoinedStr):
             # Format string with no dynamic expressions
             if all(isinstance(part, ast.Constant) for part in node.values):
-                return "".join(
-                    str(p.value) for p in node.values if isinstance(p, ast.Constant)
-                )
+                return "".join(str(p.value) for p in node.values if isinstance(p, ast.Constant))
             return None
         elif isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
             left = self._static_string(node.left, depth + 1)
