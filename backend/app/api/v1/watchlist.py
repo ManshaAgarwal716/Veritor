@@ -72,11 +72,9 @@ async def check_watchlist_updates() -> WatchlistCheckResponse:
                 scan_manager=scan_mgr,
             )
 
-    return WatchlistCheckResponse(
-        checked_count=0,
-        updates_detected=0,
-        scans_triggered=0,
-        details=[],
+    return await scheduler.check_watchlist_now(
+        session=None,
+        scan_manager=scan_mgr,
     )
 
 

@@ -223,3 +223,90 @@ async def test_release_monitoring_scheduler_check(tmp_path: Path) -> None:
     assert status.monitored_packages_count == 1
     assert status.last_check_results is not None
     assert status.last_check_results["updates_detected"] == 1
+
+
+async def test_release_monitoring_in_memory_mode(tmp_path: Path) -> None:
+    """Verify monitoring functions properly when running in-memory without a database."""
+    manager = ScanManager(base_work_dir=tmp_path / "scans")
+    entry = manager.add_watchlist_entry("npm", "chalk", "In-memory test package")
+    entry["last_scanned_version"] = "4.0.0"
+
+    scheduler = ReleaseMonitoringScheduler(request_delay_seconds=0.0, max_concurrency=2)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"dist-tags": {"latest": "5.3.0"}})
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as client:
+        res = await scheduler.check_watchlist_now(
+            session=None,
+            scan_manager=manager,
+            client=client,
+            auto_scan=True,
+        )
+
+        assert res.checked_count == 1
+        assert res.updates_detected == 1
+        assert res.scans_triggered == 1
+
+        entries = manager.get_watchlist()
+        assert len(entries) == 1
+        assert entries[0]["has_update"] is True
+        assert entries[0]["latest_version"] == "5.3.0"
+        assert entries[0]["last_checked_at"] is not None
+
+
+async def test_scheduler_prevents_duplicate_scans(tmp_path: Path) -> None:
+    """Verify that multiple checks for the same latest version do not trigger duplicate scans."""
+    manager = ScanManager(base_work_dir=tmp_path / "scans")
+    entry = manager.add_watchlist_entry("npm", "lodash", "Utility library")
+    entry["last_scanned_version"] = "4.17.20"
+
+    scheduler = ReleaseMonitoringScheduler(request_delay_seconds=0.0)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"dist-tags": {"latest": "4.17.21"}})
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as client:
+        # First check triggers the scan
+        res1 = await scheduler.check_watchlist_now(
+            session=None,
+            scan_manager=manager,
+            client=client,
+            auto_scan=True,
+        )
+        assert res1.scans_triggered == 1
+        assert res1.details[0]["scan_triggered"] is True
+
+        # Second check detects the update but skips re-triggering duplicate scan
+        res2 = await scheduler.check_watchlist_now(
+            session=None,
+            scan_manager=manager,
+            client=client,
+            auto_scan=True,
+        )
+        assert res2.scans_triggered == 0
+        assert res2.details[0]["duplicate_skipped"] is True
+
+
+async def test_scheduler_check_lock() -> None:
+    """Verify scheduler lock prevents concurrent overlapping checks."""
+    import asyncio
+
+    scheduler = ReleaseMonitoringScheduler(request_delay_seconds=0.0)
+
+    # Acquire the lock to simulate an active running check
+    assert not scheduler._check_lock.locked()
+    async with scheduler._check_lock:
+        assert scheduler._check_lock.locked()
+        # Verify another acquisition would block
+        lock_task = asyncio.create_task(scheduler._check_lock.acquire())
+        done, _ = await asyncio.wait([lock_task], timeout=0.05)
+        assert len(done) == 0
+        assert not lock_task.done()
+
+    # After releasing lock, task can acquire it
+    await lock_task
+    scheduler._check_lock.release()
+

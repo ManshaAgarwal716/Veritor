@@ -133,9 +133,38 @@ def test_generate_json_report(sample_report: ScanReportResponse) -> None:
     # Check findings & risk
     assert len(result["security_findings"]) == 1
     assert result["security_findings"][0]["rule_id"] == "EXEC-001"
-    assert result["deterministic_risk_assessment"]["score"] == 65
-    assert result["deterministic_risk_assessment"]["level"] == "HIGH"
+    risk_out = result["deterministic_risk_assessment"]
+    assert risk_out["score"] == 65
+    assert risk_out["level"] == "HIGH"
+    expected_factors = ["Suspicious postinstall script", "Dynamic eval usage"]
+    assert risk_out["factors"] == expected_factors
+    assert risk_out["contributing_factors"] == expected_factors
     assert result["provenance_verification"]["status"] == "VERIFIED"
+
+
+def test_generate_json_report_with_factors_key(sample_report: ScanReportResponse) -> None:
+    # Test BUG-01 regression: risk dict containing 'factors' instead of 'contributing_factors'
+    sample_report.risk = {
+        "score": 42,
+        "level": "MEDIUM",
+        "confidence": "HIGH",
+        "completeness": "COMPLETE",
+        "summary": "Moderate risk",
+        "factors": [
+            {"id": "SRC-001", "points": 10, "explanation": "Uncertain source"},
+            {"id": "ART-002", "points": 15, "explanation": "Extra binaries"},
+        ],
+        "contributing_evidence": ["Extra binaries found in lib/"],
+        "recommendations": ["Inspect dependencies"],
+        "limitations": [],
+    }
+    result = generate_json_report(sample_report)
+    risk_out = result["deterministic_risk_assessment"]
+    assert risk_out["score"] == 42
+    assert len(risk_out["factors"]) == 2
+    assert risk_out["factors"][0]["id"] == "SRC-001"
+    assert risk_out["contributing_factors"] == risk_out["factors"]
+    assert risk_out["contributing_evidence"] == ["Extra binaries found in lib/"]
 
 
 def test_generate_pdf_report(sample_report: ScanReportResponse) -> None:
