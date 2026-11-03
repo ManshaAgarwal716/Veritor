@@ -428,6 +428,18 @@ npm run build
    - Tested Ollama inference timeout handling, ensuring fallback without corrupting immutable deterministic findings or risk scores.
    - Tested external API HTTP 429 rate limit error handling without infinite retry loops.
    - Fixed CI typing compatibility in `backend/app/provenance/pypi.py` (`ExtensionOID` and `PyPIBundleVerifier` protocols) and ensured 100% clean `mypy` strict type checking and `ruff format` conformance across all 109 backend files.
+8. **Remediation Task 8 (Automated Database Migration & Rollback Tests - TST-03)**:
+   - Added automated database migration test suite in [`backend/tests/test_database_migrations.py`](file:///Users/apple12390/Veritor/backend/tests/test_database_migrations.py) executing full 7-step Alembic migration lifecycle.
+   - Built isolated dynamic test database infrastructure (`veritor_test_mig_<uuid>`) ensuring test runs never modify production or development databases. Automatically cleans up by terminating lingering connections (`pg_terminate_backend`) and dropping the test database during fixture teardown.
+   - Tested Alembic upgrade to `head`, verifying table creation across all 9 application models plus `alembic_version`.
+   - Tested schema integrity: verified release monitoring columns on `watchlist_entries` (`latest_version`, `has_update`, `last_checked_at`, `diff_summary_json`), scan state tracking columns, and performance indexes (`ix_packages_ecosystem_name`, `ix_scans_pkg_ver`, `ix_scans_created_at`, `ix_watchlist_ecosystem_package`).
+   - Tested foreign-key constraints and cascade deletions: verified deleting a parent `Scan` record cascades cleanly to associated `ScanReport` and `SecurityFinding` records, and verified `IntegrityError` rejection on foreign-key violations.
+   - Tested application repository operations (`ScanRepository` save/get scan, save/get report, add/get/update/remove watchlist entries) against the migrated database.
+   - Tested partial rollback to `001_initial_schema` (confirming release monitoring column drops) and full rollback to `base` (confirming all application tables are cleanly dropped).
+   - Tested re-upgrade from `base` to `head` and re-verified application repository operations to guarantee idempotent migration execution.
+   - Tested both SQLite and live PostgreSQL environments (`test_sqlite_migration_lifecycle` and `test_postgres_migration_lifecycle`).
+   - Integrated automated migration testing into GitHub Actions CI (`.github/workflows/ci.yml`) using a live PostgreSQL 16 container service.
+   - Test metrics: **933 backend tests passed**, **55 frontend tests passed**. Zero mypy errors, zero ruff errors.
    - Total test counts: **931 backend tests passed**, **55 frontend tests passed**.
 
 

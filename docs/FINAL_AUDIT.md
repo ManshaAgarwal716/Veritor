@@ -33,7 +33,7 @@ The audit identified **18 specific findings** across 7 categories:
 | **ASSUM-01**| Incorrect Assumption| **MEDIUM** | `backend/app/monitoring/scheduler.py` | Release monitoring check requires DB session; aborts in in-memory mode without checking in-memory watchlist (Status: **FIXED**) |
 | **SEC-02** | Security Boundary | **MEDIUM** | `backend/app/ai/investigator.py` | Code diffs and script contents passed to AI prompt lack strict structured enclosure tags |
 | **TST-02** | Missing Tests | **MEDIUM** | `backend/tests/test_concurrency_and_stress.py` | Lacks concurrent stress tests evaluating pipeline race conditions and simultaneous scans (Status: **FIXED**) |
-| **TST-03** | Missing Tests | **MEDIUM** | `backend/alembic/` | Lacks automated migration tests exercising forward `upgrade head` and reverse `downgrade base` |
+| **TST-03** | Missing Tests | **MEDIUM** | `backend/alembic/` | Lacks automated migration tests exercising forward `upgrade head` and reverse `downgrade base` (Status: **FIXED**) |
 | **BUG-01** | Bug / Data Parity | **LOW** | `backend/app/reports/json_exporter.py` | JSON exporter queries `contributing_factors` instead of model field `factors` (Status: **FIXED**) |
 | **BUG-02** | Docker Config | **LOW** | `docker-compose.yml` | Postgres container healthcheck hardcodes `-U veritor -d veritor` (Status: **FIXED**) |
 | **BUG-03** | API Integration | **LOW** | `frontend/src/lib/api.ts` | File diff endpoint interpolates path directly without per-segment URL encoding (Status: **FIXED**) |
@@ -311,8 +311,21 @@ The audit identified **18 specific findings** across 7 categories:
 #### TST-03: Lacks Database Migration Rollback Tests
 - **Severity**: **MEDIUM**
 - **Affected File**: `backend/alembic/versions/`
-- **Analysis**: The database test suite executes tests against in-memory SQLite tables initialized via `Base.metadata.create_all(engine)`. Alembic migration scripts (`001_initial_schema.py` and `002_watchlist_monitoring.py`) are never exercised in automated CI tests for both `upgrade` and `downgrade`.
-- **Remediation**: Add a pytest suite testing `alembic upgrade head` followed by `alembic downgrade base` on a test database.
+- **Analysis**: The database test suite previously executed tests against in-memory SQLite tables initialized via `Base.metadata.create_all(engine)`. Alembic migration scripts (`001_initial_schema.py` and `002_watchlist_monitoring.py`) were never exercised in automated CI tests for both `upgrade` and `downgrade`.
+- **Remediation & Fix**:
+  Implemented comprehensive automated database migration test suite in [`backend/tests/test_database_migrations.py`](file:///Users/apple12390/Veritor/backend/tests/test_database_migrations.py):
+  1. **Isolated Test Database Infrastructure**: Creates a dynamically-named temporary database (`veritor_test_mig_<uuid>`) via superuser connection (`autocommit=True`), guaranteeing zero interference with production or development databases. Automatically disconnects lingering backend processes (`pg_terminate_backend`) and drops the temporary database during test fixture teardown.
+  2. **Step 1 — Upgrade to Head**: Executes `command.upgrade(cfg, "head")` from empty database.
+  3. **Step 2 — Schema Creation & Table Inventory**: Inspects database metadata and verifies all expected tables (`packages`, `package_versions`, `scans`, `scan_reports`, `file_comparisons`, `security_findings`, `provenance_results`, `ai_explanations`, `watchlist_entries`, and `alembic_version`).
+  4. **Step 3 — Required Columns & Indexes**: Asserts column presence including release monitoring columns added in revision `002` (`latest_version`, `has_update`, `last_checked_at`, `diff_summary_json`), scan state tracking columns, and performance indexes (`ix_packages_ecosystem_name`, `ix_scans_pkg_ver`, `ix_scans_created_at`, `ix_watchlist_ecosystem_package`).
+  5. **Step 4 — Foreign-Key Constraints & Cascade Deletions**: Validates package-version-scan-report entity relationship hierarchy, verifies cascade deletion removes associated `ScanReport` and `SecurityFinding` records upon scan removal, and asserts `IntegrityError` when attempting invalid foreign key insertions on PostgreSQL.
+  6. **Step 5 — Application Operations**: Exercises `ScanRepository` methods on the migrated schema: `save_scan()`, `get_scan()`, `save_report()`, `get_report()`, `add_watchlist_entry()`, `get_watchlist()`, `get_watchlist_entry()`, release monitoring updates, and `remove_watchlist_entry()`.
+  7. **Step 6 — Downgrade to Base**: Executes partial downgrade to `001_initial_schema` verifying column drops on `watchlist_entries`, followed by full downgrade `command.downgrade(cfg, "base")` verifying complete removal of all application tables.
+  8. **Step 7 — Re-upgrade After Downgrade**: Executes `command.upgrade(cfg, "head")` following downgrade to base and re-tests application operations to ensure idempotent schema re-application.
+- **Test Verification**:
+  - `test_sqlite_migration_lifecycle`: PASSED (0.37s)
+  - `test_postgres_migration_lifecycle`: PASSED on live PostgreSQL (0.50s)
+  - Integrated with GitHub Actions CI via PostgreSQL service container and `VERITOR_TEST_DATABASE_URL` environment configuration.
 
 ---
 
