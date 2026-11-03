@@ -143,9 +143,13 @@ export async function getScanFiles(scanId: string): Promise<ScanFilesResponse> {
  */
 export async function getFileDiff(scanId: string, filePath: string): Promise<FileDiffItem> {
   const baseUrl = getApiBaseUrl();
-  // Ensure filePath slashes are preserved or properly encoded for FastAPI path parameter
+  // Ensure filePath slashes are preserved while encoding each individual segment
   const cleanPath = filePath.replace(/^\/+/, "");
-  const res = await fetch(`${baseUrl}/api/v1/scans/${encodeURIComponent(scanId)}/files/${cleanPath}/diff`, {
+  const encodedPath = cleanPath
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+  const res = await fetch(`${baseUrl}/api/v1/scans/${encodeURIComponent(scanId)}/files/${encodedPath}/diff`, {
     method: "GET",
     headers: {
       "Content-Type": "application/json",

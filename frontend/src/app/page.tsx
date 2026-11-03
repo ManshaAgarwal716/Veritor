@@ -22,10 +22,11 @@ import {
   getScanStatus,
 } from "../lib/api";
 import {
-  addToWatchlist,
+  addWatchlistItem,
   getScanHistory,
   getWatchlist,
   saveScanToHistory,
+  syncWatchlist,
 } from "../lib/storage";
 import {
   Ecosystem,
@@ -77,6 +78,13 @@ export default function Home() {
 
   // Listen for storage events across tabs or components
   useEffect(() => {
+    let active = true;
+    syncWatchlist()
+      .then((items) => {
+        if (active) setWatchlist(items);
+      })
+      .catch(() => {});
+
     const handleHistoryUpdate = () => setHistory(getScanHistory());
     const handleWatchlistUpdate = () => setWatchlist(getWatchlist());
 
@@ -84,6 +92,7 @@ export default function Home() {
     window.addEventListener("veritor_watchlist_updated", handleWatchlistUpdate);
 
     return () => {
+      active = false;
       window.removeEventListener("veritor_history_updated", handleHistoryUpdate);
       window.removeEventListener("veritor_watchlist_updated", handleWatchlistUpdate);
       if (pollingRef.current) clearInterval(pollingRef.current);
@@ -239,13 +248,14 @@ export default function Home() {
   };
 
   // Add to watchlist handler
-  const handleAddToWatchlist = (ecosystem: Ecosystem, packageName: string) => {
-    addToWatchlist({
+  const handleAddToWatchlist = async (ecosystem: Ecosystem, packageName: string) => {
+    await addWatchlistItem({
       ecosystem,
       package_name: packageName,
       notes: "Monitored dependency",
     });
-    setWatchlist(getWatchlist());
+    const synced = await syncWatchlist();
+    setWatchlist(synced);
   };
 
   return (
@@ -389,7 +399,10 @@ export default function Home() {
               setFormParams({ ecosystem, packageName: pkgName, version: ver || "" });
               setActiveTab("scanner");
             }}
-            onRefresh={() => setWatchlist(getWatchlist())}
+            onRefresh={async () => {
+              const items = await syncWatchlist();
+              setWatchlist(items);
+            }}
           />
         )}
 

@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 
 import pytest
 from fastapi import FastAPI
@@ -120,3 +121,25 @@ def test_settings_read_prefixed_environment(monkeypatch: pytest.MonkeyPatch) -> 
 
     assert settings.triage_model == "example-model"
     assert settings.cors_origins == ["http://one.test"]
+
+
+def test_repo_root_resolution(tmp_path: Path) -> None:
+    from app.config import REPO_ROOT, _find_repo_root
+
+    # 1. Local development resolution
+    assert REPO_ROOT.exists()
+    assert (REPO_ROOT / "pyproject.toml").exists() or (REPO_ROOT / ".git").exists()
+
+    # 2. Simulated Docker container resolution (/app/app/config.py)
+    docker_app = tmp_path / "app"
+    docker_app.mkdir()
+    (docker_app / "alembic.ini").touch()
+    (docker_app / "pyproject.toml").touch()
+    docker_pkg = docker_app / "app"
+    docker_pkg.mkdir()
+    simulated_config = docker_pkg / "config.py"
+    simulated_config.touch()
+
+    # When config is at /app/app/config.py, root should be /app
+    resolved_docker = _find_repo_root(simulated_config)
+    assert resolved_docker == docker_app

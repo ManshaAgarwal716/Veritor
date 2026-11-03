@@ -24,6 +24,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     if session_factory:
         init_db()
         await scheduler.start(session_factory, scan_mgr)
+    else:
+        await scheduler.start(None, scan_mgr)
     yield
     scheduler.stop()
 

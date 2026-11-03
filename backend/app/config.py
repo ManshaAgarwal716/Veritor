@@ -10,12 +10,41 @@ from app.analysis.models import AnalysisLimits
 from app.archives.extract import ExtractionLimits
 from app.comparison.models import ComparisonLimits
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+
+def _find_repo_root(source_file: Path | None = None) -> Path:
+    """Resolve the repository or application root across local and containerized environments."""
+    current = (source_file or Path(__file__)).resolve()
+    # 1. In local dev, parents[2] is the workspace root containing .git, docker-compose.yml, or .env
+    if len(current.parents) > 2:
+        candidate = current.parents[2]
+        if (
+            (candidate / ".git").exists()
+            or (candidate / "docker-compose.yml").exists()
+            or (candidate / ".env").exists()
+        ):
+            return candidate
+
+    # 2. In Docker containers (WORKDIR /app, app package at /app/app),
+    # parents[1] is /app containing pyproject.toml, alembic.ini, or mounted .env
+    if len(current.parents) > 1:
+        candidate_app = current.parents[1]
+        if (candidate_app / "alembic.ini").exists() or (candidate_app / "pyproject.toml").exists():
+            return candidate_app
+
+    # 3. Fallback to parents[2] if available, else current.parent
+    return current.parents[2] if len(current.parents) > 2 else current.parent
+
+
+REPO_ROOT = _find_repo_root()
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=REPO_ROOT / ".env",
+        env_file=(
+            REPO_ROOT / ".env",
+            Path.cwd() / ".env",
+            ".env",
+        ),
         env_prefix="VERITOR_",
         extra="ignore",
     )

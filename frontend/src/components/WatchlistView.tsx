@@ -12,14 +12,10 @@ import {
   AlertTriangle,
   CheckCircle2,
 } from "lucide-react";
+import { checkWatchlistUpdates } from "../lib/api";
 import {
-  addToWatchlist as apiAddToWatchlist,
-  checkWatchlistUpdates,
-  removeFromWatchlist as apiRemoveFromWatchlist,
-} from "../lib/api";
-import {
-  addToWatchlist as storageAddToWatchlist,
-  removeFromWatchlist as storageRemoveFromWatchlist,
+  addWatchlistItem,
+  removeWatchlistItem,
 } from "../lib/storage";
 import { Ecosystem, WatchlistItem } from "../lib/types";
 
@@ -50,32 +46,26 @@ export function WatchlistView({
     }
     setError(null);
     try {
-      await apiAddToWatchlist({
+      await addWatchlistItem({
         ecosystem: newEcosystem,
         package_name: pkg,
         notes: notes.trim() || undefined,
       });
-    } catch {
-      // Fallback to storage
-      storageAddToWatchlist({
-        ecosystem: newEcosystem,
-        package_name: pkg,
-        notes: notes.trim() || undefined,
-      });
+      setNewPackage("");
+      setNotes("");
+      onRefresh();
+    } catch (err) {
+      setError(String(err));
     }
-    setNewPackage("");
-    setNotes("");
-    onRefresh();
   }
 
   async function handleRemove(id: string) {
     try {
-      await apiRemoveFromWatchlist(id);
-    } catch {
-      // Ignore if offline
+      await removeWatchlistItem(id);
+      onRefresh();
+    } catch (err) {
+      setError(String(err));
     }
-    storageRemoveFromWatchlist(id);
-    onRefresh();
   }
 
   async function handleCheckUpdates() {

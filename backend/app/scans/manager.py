@@ -724,6 +724,27 @@ class ScanManager:
             except Exception as exc:
                 logger.warning("Error saving watchlist entry to DB: %s", exc)
 
+        # Check if there is already a completed scan for this package in memory
+        matching_scans = [
+            s
+            for s in self._scans.values()
+            if s.ecosystem.value == ecosystem
+            and s.package_name == package_name
+            and s.status == ScanState.COMPLETED
+        ]
+        if matching_scans:
+            matching_scans.sort(key=lambda s: s.created_at, reverse=True)
+            latest = matching_scans[0]
+            item["last_scanned_version"] = latest.version
+            if latest.report and latest.report.risk:
+                r_dict = (
+                    latest.report.risk
+                    if isinstance(latest.report.risk, dict)
+                    else latest.report.risk.model_dump()
+                )
+                item["last_risk_score"] = r_dict.get("score")
+                item["last_risk_level"] = r_dict.get("level")
+
         self._in_memory_watchlist[entry_id] = item
         return item
 

@@ -59,13 +59,17 @@ def generate_json_report(report: ScanReportResponse) -> dict[str, Any]:
     }
 
     # Extract risk summary
+    factors = risk.get("factors") or risk.get("contributing_factors") or []
+    contributing_evidence = risk.get("contributing_evidence") or []
     risk_summary = {
         "score": risk.get("score"),
         "level": risk.get("level"),
         "confidence": risk.get("confidence"),
         "completeness": risk.get("completeness"),
         "summary": risk.get("summary"),
-        "contributing_factors": risk.get("contributing_factors", []),
+        "factors": factors,
+        "contributing_factors": factors,
+        "contributing_evidence": contributing_evidence,
         "recommendations": risk.get("recommendations", []),
         "limitations": risk.get("limitations", []),
     }
