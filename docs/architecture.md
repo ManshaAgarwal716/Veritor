@@ -82,9 +82,13 @@ flowchart TD
 
 ### 2.6 Cryptographic Provenance Verification (`app.provenance`)
 - **npm**: Verifies Sigstore SLSA provenance bundles via Rekor transparency log public key infrastructure. Inspects Fulcio OIDC certificate extensions to confirm build identity, source repository, commit SHA, and GitHub Actions workflow.
-- **PyPI**: Verifies PEP 740 digital attestations and wheel cryptographic digests.
-- Result statuses: `VERIFIED`, `NOT_VERIFIED`, `UNAVAILABLE`, `INVALID`, `UNCERTAIN`.
-- **Safety Invariant**: Missing provenance awards 0 risk points and does not falsely imply maliciousness.
+- **PyPI (PEP 740)**: Verifies index-hosted PEP 740 digital attestations and wheel/sdist cryptographic digests using the official Sigstore verification suite (`sigstore>=4,<5`, `cryptography>=44`).
+  - **Dead Simple Signing Envelope (DSSE)**: Verifies Pre-Authentication Encoding (PAE) cryptographic signatures on ECDSA NIST P-256 with SHA-256 over in-toto statement payloads.
+  - **Fulcio OIDC Certificate Identity**: Validates leaf X.509 certificates, checking validity windows, expiration against Rekor transparency log timestamps, and trusted identity providers (`token.actions.githubusercontent.com`, `gitlab.com`, `accounts.google.com`).
+  - **Identity & Subject Binding**: Extracts repository, commit SHA, and workflow identity from Fulcio OIDs (`1.3.6.1.4.1.57264.1.*`) and Subject Alternative Name (SAN) URIs; matches signed subject SHA-256 digests against raw distribution bytes on disk.
+  - **Strict Security Boundaries**: Unverified bundle metadata is rejected without cryptographic verification (`NOT_VERIFIED`); expired certificates without proof of logging and signature corruption are marked `INVALID`.
+- **Result Statuses**: `VERIFIED`, `NOT_VERIFIED`, `UNAVAILABLE`, `INVALID`, `UNCERTAIN`.
+- **Safety Invariant**: Missing provenance awards 0 risk points and does not falsely imply maliciousness (`UNAVAILABLE`).
 
 ### 2.7 Deterministic Risk Engine (`app.scoring.risk`)
 - Transparent 0–100 heuristic scoring based purely on verifiable evidence:

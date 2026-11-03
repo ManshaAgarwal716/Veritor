@@ -292,9 +292,16 @@ def test_parse_errors_are_a_gap(tmp_path: Path) -> None:
 
 
 def test_unsupported_languages_are_gaps(tmp_path: Path) -> None:
-    analysis = analyze(tmp_path, {**BASE, "a.py": "import os", "b.sh": "echo hi"}, BASE)
+    analysis = analyze(tmp_path, {**BASE, "a.rb": "puts 'hello'", "b.sh": "echo hi"}, BASE)
     assert {gap.reason for gap in analysis.gaps} == {GapReason.UNSUPPORTED_LANGUAGE}
     assert len(analysis.gaps) == 2
+
+
+def test_python_is_supported_language_not_gap(tmp_path: Path) -> None:
+    analysis = analyze(tmp_path, {**BASE, "a.py": "import os"}, BASE)
+    unsupported = [g for g in analysis.gaps if g.reason == GapReason.UNSUPPORTED_LANGUAGE]
+    assert len(unsupported) == 0
+    assert analysis.files_scanned == 1
 
 
 def test_deadline_leaves_gaps(tmp_path: Path) -> None:
