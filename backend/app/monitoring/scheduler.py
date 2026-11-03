@@ -74,6 +74,15 @@ class ReleaseMonitoringScheduler:
 
         Prevents overlapping checks and supports both database and in-memory modes.
         """
+        if self._check_lock.locked():
+            logger.info("Watchlist check already in progress; skipping concurrent check")
+            return WatchlistCheckResponse(
+                checked_count=0,
+                updates_detected=0,
+                scans_triggered=0,
+                details=[],
+            )
+
         async with self._check_lock:
             if session is not None:
                 return await self._check_database_watchlist(
@@ -156,11 +165,13 @@ class ReleaseMonitoringScheduler:
                                 models.Scan.ecosystem == entry.ecosystem,
                                 models.Scan.package_name == entry.package_name,
                                 models.Scan.version == latest_ver,
-                                models.Scan.status.in_([
-                                    ScanState.ACCEPTED.value,
-                                    ScanState.RUNNING.value,
-                                    ScanState.COMPLETED.value,
-                                ]),
+                                models.Scan.status.in_(
+                                    [
+                                        ScanState.ACCEPTED.value,
+                                        ScanState.RUNNING.value,
+                                        ScanState.COMPLETED.value,
+                                    ]
+                                ),
                             )
                             .first()
                         )

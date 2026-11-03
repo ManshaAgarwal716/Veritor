@@ -23,7 +23,7 @@ import logging
 import re
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 from urllib.parse import quote
 
 import cryptography.x509
@@ -31,6 +31,7 @@ import httpx
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.x509.oid import ExtensionOID
 
 from app.adapters.base import PackageMetadata
 from app.provenance.models import ProvenanceResult, ProvenanceStatus
@@ -129,7 +130,7 @@ def _identity_from_certificate(certificate: Any) -> SignerIdentity:
     if not source_repo or not build_workflow:
         try:
             san_ext = certificate.extensions.get_extension_for_oid(
-                cryptography.x509.ExtensionOID.SUBJECT_ALTERNATIVE_NAME
+                ExtensionOID.SUBJECT_ALTERNATIVE_NAME
             )
             for name in san_ext.value:
                 if isinstance(name, cryptography.x509.UniformResourceIdentifier):
@@ -156,6 +157,14 @@ def _normalize_repository(url: str | None) -> str | None:
     if not url:
         return None
     return url.strip().rstrip("/").removesuffix(".git").lower()
+
+
+class PyPIBundleVerifier(Protocol):
+    """Protocol for verifiers capable of verifying PyPI attestation bundles."""
+
+    def verify(self, bundle_input: Any) -> VerifiedBundle:
+        """Verify the bundle cryptographically and return VerifiedBundle."""
+        ...
 
 
 class SigstorePyPIBundleVerifier:
@@ -337,11 +346,11 @@ class PyPIProvenanceChecker:
     def __init__(
         self,
         client: httpx.AsyncClient,
-        verifier: BundleVerifier | None = None,
+        verifier: PyPIBundleVerifier | BundleVerifier | None = None,
         timeout_seconds: float = 60.0,
     ) -> None:
         self._client = client
-        self._verifier = verifier if verifier is not None else SigstorePyPIBundleVerifier()
+        self._verifier: Any = verifier if verifier is not None else SigstorePyPIBundleVerifier()
         self._timeout_seconds = timeout_seconds
 
     async def check(
@@ -391,9 +400,7 @@ class PyPIProvenanceChecker:
         # Query PyPI integrity API endpoint if not present in version document
         if not attestation_bundles:
             artifact_filename = (
-                metadata.artifacts[0].filename
-                if metadata.artifacts
-                else artifact_path.name
+                metadata.artifacts[0].filename if metadata.artifacts else artifact_path.name
             )
             # Query standard PEP 740 filename provenance route first
             filename_url = (
@@ -496,8 +503,14 @@ class PyPIProvenanceChecker:
 
         # 5. Execute cryptographic verification
         try:
+            verifier_fn = self._verifier.verify
+
+            def _do_verify(b: Any) -> VerifiedBundle:
+                res: VerifiedBundle = verifier_fn(b)
+                return res
+
             async with asyncio.timeout(self._timeout_seconds):
-                verified = await asyncio.to_thread(self._verifier.verify, first_bundle)
+                verified = await asyncio.to_thread(_do_verify, first_bundle)
         except SignatureInvalidError as exc:
             return ProvenanceResult(
                 status=ProvenanceStatus.INVALID,
@@ -660,9 +673,7 @@ def _evaluate_signed_content(
             )
         digest_matched = True
     else:
-        return invalid(
-            "The signed statement subject contains neither SHA-256 nor SHA-512 digests."
-        )
+        return invalid("The signed statement subject contains neither SHA-256 nor SHA-512 digests.")
 
     # 6. Check commit in statement if present
     statement_commit = _commit_in_statement(statement)
@@ -746,6 +757,7 @@ def _commit_in_statement(statement: dict[str, Any]) -> str | None:
 __all__ = [
     "BundleUnreadableError",
     "BundleVerifier",
+    "PyPIBundleVerifier",
     "PyPIProvenanceChecker",
     "SignatureInvalidError",
     "SignerIdentity",

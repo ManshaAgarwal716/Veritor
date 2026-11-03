@@ -416,6 +416,19 @@ npm run build
    - Implemented API client boundary tests in [`frontend/tests/api_client.test.mjs`](file:///Users/apple12390/Veritor/frontend/tests/api_client.test.mjs) (11 tests) verifying `ApiError` extraction, JSON & non-JSON error formats, `createScan`, path segment encoding in `getFileDiff` (`BUG-03`), watchlist status codes, health checks, and Ollama connection status.
    - Preserved useful static contract checks in [`frontend/tests/components.test.mjs`](file:///Users/apple12390/Veritor/frontend/tests/components.test.mjs) (9 tests).
    - All 55 frontend tests pass (`npm test`). Typecheck (`npm run typecheck`), lint (`npm run lint`), and production Next.js build (`npm run build`) pass cleanly. All 920 backend tests pass (`pytest backend/tests`).
+7. **Remediation Task 7 (Backend Concurrency & Stress Testing - TST-02)**:
+   - Added 11 reproducible concurrency and stress tests in [`backend/tests/test_concurrency_and_stress.py`](file:///Users/apple12390/Veritor/backend/tests/test_concurrency_and_stress.py).
+   - Validated simultaneous multi-package scans running in parallel without data cross-talk or race conditions.
+   - Validated duplicate scan request handling with unique UUID generation and isolated state.
+   - Tested filesystem temporary directory isolation under concurrent operations.
+   - Tested thread-safe concurrent archive extractions via `asyncio.to_thread`.
+   - Tested database session isolation under concurrent load using independent session scopes.
+   - Tested scheduler overlap prevention and bounded concurrency enforcement (`DEFAULT_MAX_CONCURRENCY = 4`).
+   - Tested active task cancellation and pipeline failure cleanup to guarantee zero orphaned temporary directories.
+   - Tested Ollama inference timeout handling, ensuring fallback without corrupting immutable deterministic findings or risk scores.
+   - Tested external API HTTP 429 rate limit error handling without infinite retry loops.
+   - Fixed CI typing compatibility in `backend/app/provenance/pypi.py` (`ExtensionOID` and `PyPIBundleVerifier` protocols) and ensured 100% clean `mypy` strict type checking and `ruff format` conformance across all 109 backend files.
+   - Total test counts: **931 backend tests passed**, **55 frontend tests passed**.
 
 
 

@@ -309,4 +309,3 @@ async def test_scheduler_check_lock() -> None:
     # After releasing lock, task can acquire it
     await lock_task
     scheduler._check_lock.release()
-

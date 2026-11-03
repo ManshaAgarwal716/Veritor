@@ -32,7 +32,7 @@ The audit identified **18 specific findings** across 7 categories:
 | **FEAT-02** | Incomplete Feature | **MEDIUM** | `backend/app/provenance/pypi.py` | PyPI PEP 740 attestation parses bundle dictionaries but lacks Sigstore cryptographic verification (Status: **FIXED**) |
 | **ASSUM-01**| Incorrect Assumption| **MEDIUM** | `backend/app/monitoring/scheduler.py` | Release monitoring check requires DB session; aborts in in-memory mode without checking in-memory watchlist (Status: **FIXED**) |
 | **SEC-02** | Security Boundary | **MEDIUM** | `backend/app/ai/investigator.py` | Code diffs and script contents passed to AI prompt lack strict structured enclosure tags |
-| **TST-02** | Missing Tests | **MEDIUM** | `backend/tests/` | Lacks concurrent stress tests evaluating pipeline race conditions and simultaneous scans |
+| **TST-02** | Missing Tests | **MEDIUM** | `backend/tests/test_concurrency_and_stress.py` | Lacks concurrent stress tests evaluating pipeline race conditions and simultaneous scans (Status: **FIXED**) |
 | **TST-03** | Missing Tests | **MEDIUM** | `backend/alembic/` | Lacks automated migration tests exercising forward `upgrade head` and reverse `downgrade base` |
 | **BUG-01** | Bug / Data Parity | **LOW** | `backend/app/reports/json_exporter.py` | JSON exporter queries `contributing_factors` instead of model field `factors` (Status: **FIXED**) |
 | **BUG-02** | Docker Config | **LOW** | `docker-compose.yml` | Postgres container healthcheck hardcodes `-U veritor -d veritor` (Status: **FIXED**) |
@@ -287,11 +287,24 @@ The audit identified **18 specific findings** across 7 categories:
 
 ---
 
-#### TST-02: Lacks Concurrent Stress Testing
+#### TST-02: Lacks Concurrent Stress Testing (Status: **RESOLVED / FIXED**)
 - **Severity**: **MEDIUM**
 - **Affected Files**: `backend/tests/test_scan_pipeline.py`, `backend/tests/test_scan_api.py`
-- **Analysis**: While `ScanManager` uses an `asyncio.Lock` for scan creation, there are no stress tests simulating concurrent scan submissions on identical packages or multiple simultaneous scans competing for work directories.
-- **Remediation**: Add pytest test cases utilizing `asyncio.gather` to execute 10+ concurrent scan creations and state queries.
+- **Analysis**: While `ScanManager` uses an `asyncio.Lock` for scan creation, there were no stress tests simulating concurrent scan submissions on identical packages or multiple simultaneous scans competing for work directories and database sessions.
+- **Remediation**: Add pytest test cases utilizing `asyncio.gather` to execute concurrent scan creations, duplicate deduplication, work directory isolation, archive extraction, database session isolation, scheduler overlap prevention, cancellation cleanup, Ollama timeout resilience, and API rate-limit handling.
+- **Fix Applied**: Implemented comprehensive concurrency and stress test suite in [`backend/tests/test_concurrency_and_stress.py`](file:///Users/apple12390/Veritor/backend/tests/test_concurrency_and_stress.py) with 11 reproducible test scenarios:
+  1. `test_concurrent_multiple_simultaneous_scans`: Verifies 5 simultaneous scans across different packages complete without deadlocks, state cross-talk, or corrupted reports.
+  2. `test_concurrent_duplicate_scan_requests`: Verifies concurrent duplicate submissions receive unique UUIDs and execute safely in parallel.
+  3. `test_shared_temporary_directory_isolation`: Verifies that concurrent scans operating on packages with conflicting internal filenames maintain strict filesystem isolation under distinct UUID work directories.
+  4. `test_concurrent_archive_extraction`: Verifies thread safety during parallel extraction of 8 archives via worker threads without archive corruption.
+  5. `test_database_session_isolation_under_concurrency`: Verifies 5 concurrent scans persisting to SQLite across independent DB sessions commit cleanly without database lock errors.
+  6. `test_scheduler_overlap_prevention`: Verifies `ReleaseMonitoringScheduler._check_lock` prevents redundant overlapping package checks when a check is already active.
+  7. `test_scheduler_bounded_concurrency_semaphore`: Verifies watchlist update checks strictly enforce `DEFAULT_MAX_CONCURRENCY = 4` using `asyncio.Semaphore`.
+  8. `test_scan_cancellation_and_resource_cleanup`: Verifies cancelling an active scan cleans up temporary disk directories via `finally:` blocks without orphaned leaks.
+  9. `test_pipeline_failure_cleanup`: Verifies that download/extraction failures transition scans to `FAILED` and remove temporary directories.
+  10. `test_ollama_timeout_graceful_handling`: Verifies Ollama inference timeouts fail gracefully to `UNAVAILABLE`/`FAILED` while preserving deterministic findings and risk scores.
+  11. `test_external_api_rate_limit_behavior`: Verifies HTTP 429 Too Many Requests errors are caught cleanly, marked `FAILED`, and release resources without infinite retries.
+- **Test Verification**: All 11 tests in `test_concurrency_and_stress.py` pass in 0.62s. Full backend suite passes (931 passed). Mypy and Ruff formatting checks pass with zero errors.
 
 ---
 

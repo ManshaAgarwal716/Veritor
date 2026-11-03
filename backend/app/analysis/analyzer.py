@@ -206,9 +206,9 @@ def _scan_target(
             )
             hits, pre_existing = _split_introduced(hits, source_hits)
 
-    runs_at_install = (
-        named_in_text(target.path, install_text)
-        or target.path.lower() in ("setup.py", "setup_hooks.py")
+    runs_at_install = named_in_text(target.path, install_text) or target.path.lower() in (
+        "setup.py",
+        "setup_hooks.py",
     )
     is_large = len(data) >= limits.large_file_bytes
     is_suspicious_artifact = (
