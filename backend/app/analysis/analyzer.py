@@ -23,6 +23,7 @@ from app.analysis.models import (
     SecurityAnalysis,
     Severity,
 )
+from app.analysis.py_scanner import scan_python
 from app.analysis.rules import RULES
 from app.archives.models import ContentType, EntryKind, FileInventory, InventoryEntry
 from app.comparison.generated import install_script_text, named_in_text
@@ -35,7 +36,7 @@ from app.comparison.models import (
 from app.comparison.trees import FileTree
 
 _MANIFEST_LIMIT = 1024 * 1024
-_OTHER_CODE_SUFFIXES = (".sh", ".bash", ".py", ".ps1", ".bat", ".cmd", ".rb", ".pl")
+_OTHER_CODE_SUFFIXES = (".sh", ".bash", ".ps1", ".bat", ".cmd", ".rb", ".pl")
 _SENSITIVE_AT_INSTALL = {Signal.EXECUTION, Signal.PROCESS, Signal.CREDENTIAL, Signal.NETWORK}
 _ACTIVE_SIGNALS = {Signal.EXECUTION, Signal.PROCESS, Signal.CREDENTIAL, Signal.NETWORK}
 
@@ -78,7 +79,10 @@ def analyze_package(
                     AnalysisGap(
                         path=target.path,
                         reason=GapReason.UNSUPPORTED_LANGUAGE,
-                        detail="This code is not JavaScript or TypeScript, so it was not scanned.",
+                        detail=(
+                            "This code is not supported for static AST analysis, so it was not"
+                            " scanned."
+                        ),
                     )
                 )
             continue
@@ -176,7 +180,11 @@ def _scan_target(
         )
         return []
 
-    result = scan_source(data, language)
+    if language == "python":
+        result = scan_python(data)
+    else:
+        result = scan_source(data, language)
+
     if result.has_parse_errors:
         gaps.append(
             AnalysisGap(
@@ -191,9 +199,17 @@ def _scan_target(
     if target.compare_with_source and source is not None:
         source_data = source.read(target.path, limits.max_file_bytes)
         if source_data is not None:
-            hits, pre_existing = _split_introduced(hits, scan_source(source_data, language).hits)
+            source_hits = (
+                scan_python(source_data).hits
+                if language == "python"
+                else scan_source(source_data, language).hits
+            )
+            hits, pre_existing = _split_introduced(hits, source_hits)
 
-    runs_at_install = named_in_text(target.path, install_text)
+    runs_at_install = (
+        named_in_text(target.path, install_text)
+        or target.path.lower() in ("setup.py", "setup_hooks.py")
+    )
     is_large = len(data) >= limits.large_file_bytes
     is_suspicious_artifact = (
         target.comparison_item is not None
