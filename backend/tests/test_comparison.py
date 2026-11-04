@@ -1383,3 +1383,75 @@ async def test_compare_release_stops_when_source_is_uncertain(tmp_path: Path) ->
     assert tarball_url not in requested
     assert not any("codeload" in url for url in requested)
     assert list(tmp_path.iterdir()) == []
+
+
+def test_file_tree_caching_and_hit_counts(tmp_path: Path) -> None:
+    """Verify that FileTree caches repeated file reads in memory, eliminating redundant disk IO."""
+    inv = inventory(
+        tmp_path,
+        "cache_test",
+        {
+            "package.json": manifest(),
+            "tsconfig.json": '{"compilerOptions": {}}',
+            "src/index.ts": "console.log('hello');",
+        },
+    )
+    tree = FileTree(inv)
+    assert tree.cache_hits == 0
+    assert tree.disk_reads == 0
+
+    # First read: loads from disk and caches
+    data1 = tree.read("package.json", 1024)
+    assert data1 is not None
+    assert tree.disk_reads == 1
+    assert tree.cache_hits == 0
+
+    # Subsequent reads: served from in-memory cache
+    data2 = tree.read("package.json", 1024)
+    assert data2 == data1
+    assert tree.disk_reads == 1
+    assert tree.cache_hits == 1
+
+    # Third read: still served from cache
+    data3 = tree.read("package.json", 1024)
+    assert data3 == data1
+    assert tree.disk_reads == 1
+    assert tree.cache_hits == 2
+
+    # Scoped sub-tree sharing the cache
+    scoped_tree = FileTree(inv, directory="", cache=tree._cache)
+    data_scoped = scoped_tree.read("package.json", 1024)
+    assert data_scoped == data1
+    assert scoped_tree.cache_hits == 1
+    assert scoped_tree.disk_reads == 0
+
+
+def test_comparison_performance_benchmark(tmp_path: Path) -> None:
+    """Benchmark inventory comparison verifying that cached FileTree reduces redundant IO."""
+    fixture_files = {
+        "package.json": manifest(
+            scripts={"build": "tsc"},
+            main="dist/index.js",
+        ),
+        "tsconfig.json": json.dumps({"compilerOptions": {"outDir": "dist"}}),
+        ".gitignore": "node_modules\ndist\n",
+        "src/index.ts": "export const a = 1;\n",
+        "src/helper.ts": "export const b = 2;\n",
+        "dist/index.js": "export const a = 1;\n",
+    }
+    source_inv = inventory(tmp_path, "bench_source", fixture_files)
+    package_inv = inventory(tmp_path, "bench_package", fixture_files)
+
+    meta = make_metadata()
+    match_result = matched()
+    limits = ComparisonLimits()
+
+    t0 = time.perf_counter()
+    report = compare_inventories(meta, match_result, package_inv, source_inv, limits)
+    t1 = time.perf_counter()
+
+    assert report is not None
+    assert report.summary.identical >= 1
+    duration = t1 - t0
+    # Sanity check: comparison should complete in sub-second time on modern hardware
+    assert duration < 1.0

@@ -440,7 +440,19 @@ npm run build
    - Tested both SQLite and live PostgreSQL environments (`test_sqlite_migration_lifecycle` and `test_postgres_migration_lifecycle`).
    - Integrated automated migration testing into GitHub Actions CI (`.github/workflows/ci.yml`) using a live PostgreSQL 16 container service.
    - Test metrics: **933 backend tests passed**, **55 frontend tests passed**. Zero mypy errors, zero ruff errors.
-   - Total test counts: **931 backend tests passed**, **55 frontend tests passed**.
+9. **Remediation Task 9 (Performance Optimization & Multi-Host Source Adapters - PERF-01, PERF-02, CODE-01, FEAT-03)**:
+   - **CODE-01**: Verified callsites across the codebase and removed the unused `package_dir` parameter and `Path` import from `AIInvestigator.investigate()` (`backend/app/ai/investigator.py`), `backend/app/scans/pipeline.py`, and `backend/app/analysis/service.py`.
+   - **PERF-01**: Implemented bounded in-memory read caching in `FileTree` (`backend/app/comparison/trees.py`), keyed by the entry's canonical path in the underlying inventory. Sub-scoped views inherit the parent tree's cache (`source = FileTree(source_inventory, directory, cache=repository._cache)`), eliminating repeated disk I/O, file descriptor opens, and redundant SHA-256 recalculations during scope resolution, build profiling, artifact classification, and diff calculation. Added caching and benchmark tests (`test_file_tree_caching_and_hit_counts`, `test_comparison_performance_benchmark`).
+   - **PERF-02**: Implemented true bounded concurrency in `ReleaseMonitoringScheduler` (`backend/app/monitoring/scheduler.py`) across database and in-memory watchlist modes. Package checks run concurrently via `asyncio.gather` bounded by `asyncio.Semaphore(self.max_concurrency)`, while database session commits and scan triggering are executed safely after responses resolve, preventing database lock contention while respecting registry rate limits and timeouts.
+   - **FEAT-03**:
+     - Designed `SourceHostAdapter` protocol in [`backend/app/source/base.py`](file:///Users/apple12390/Veritor/backend/app/source/base.py).
+     - Generalized repository models (`BaseRepository`, `GitHubRepository`, `GitLabRepository`, `BitbucketRepository`, `AnyRepository`) in `backend/app/source/models.py`.
+     - Implemented `GitLabSourceResolver` (`backend/app/source/gitlab.py`) with project/group parsing, git upload-pack `info/refs` packet stream parsing, candidate tag matching, and commit tarball downloads (`/-/archive/{commit}/...`).
+     - Implemented `BitbucketSourceResolver` (`backend/app/source/bitbucket.py`) with repository parsing, git upload-pack refs matching, and commit tarball retrieval (`/get/{commit}.tar.gz`).
+     - Implemented `MultiHostSourceResolver` (`backend/app/source/resolvers.py`) dispatcher, returning `UNCERTAIN` with `UncertainReason.UNSUPPORTED_HOST` honestly for unsupported hosts (e.g. SourceForge, custom internal hosts).
+     - Updated `ScanManager` default resolver to `MultiHostSourceResolver`.
+     - Added 12 unit tests in [`backend/tests/test_source_adapters.py`](file:///Users/apple12390/Veritor/backend/tests/test_source_adapters.py).
+   - Test metrics: **947 backend tests passed**, **55 frontend tests passed**. Zero mypy errors, zero ruff formatting or lint errors.
 
 
 

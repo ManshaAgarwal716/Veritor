@@ -44,15 +44,56 @@ class UncertainReason(StrEnum):
     LOOKUP_FAILED = "lookup_failed"
 
 
-class GitHubRepository(BaseModel):
+class SourceHost(StrEnum):
+    GITHUB = "github"
+    GITLAB = "gitlab"
+    BITBUCKET = "bitbucket"
+    CUSTOM = "custom"
+
+
+class BaseRepository(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    owner: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9-]*$")
-    name: str = Field(pattern=r"^[A-Za-z0-9_][A-Za-z0-9._-]*$|^\.[A-Za-z0-9._-]*[A-Za-z0-9_-]$")
+    owner: str
+    name: str
+    host: SourceHost = SourceHost.GITHUB
 
     @property
     def url(self) -> str:
+        if self.host == SourceHost.GITLAB:
+            return f"https://gitlab.com/{self.owner}/{self.name}"
+        if self.host == SourceHost.BITBUCKET:
+            return f"https://bitbucket.org/{self.owner}/{self.name}"
         return f"https://github.com/{self.owner}/{self.name}"
+
+
+class GitHubRepository(BaseRepository):
+    host: SourceHost = SourceHost.GITHUB
+    owner: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9-]*$")
+    name: str = Field(pattern=r"^[A-Za-z0-9_][A-Za-z0-9._-]*$|^\.[A-Za-z0-9._-]*[A-Za-z0-9_-]$")
+
+
+class GitLabRepository(BaseRepository):
+    host: SourceHost = SourceHost.GITLAB
+    owner: str = Field(pattern=r"^[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*$")
+    name: str = Field(pattern=r"^[A-Za-z0-9_.-]+$")
+
+    @property
+    def url(self) -> str:
+        return f"https://gitlab.com/{self.owner}/{self.name}"
+
+
+class BitbucketRepository(BaseRepository):
+    host: SourceHost = SourceHost.BITBUCKET
+    owner: str = Field(pattern=r"^[A-Za-z0-9_.-]+$")
+    name: str = Field(pattern=r"^[A-Za-z0-9_.-]+$")
+
+    @property
+    def url(self) -> str:
+        return f"https://bitbucket.org/{self.owner}/{self.name}"
+
+
+AnyRepository = GitHubRepository | GitLabRepository | BitbucketRepository | BaseRepository
 
 
 class SourceMatch(BaseModel):
@@ -65,7 +106,7 @@ class SourceMatch(BaseModel):
     confidence: Confidence = Confidence.NONE
     reason: UncertainReason | None = None
     explanation: str
-    repository: GitHubRepository | None = None
+    repository: AnyRepository | None = None
     directory: str | None = None
     commit_sha: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     tag: str | None = None
@@ -102,7 +143,7 @@ class SourceMatch(BaseModel):
 class SourceArchive(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    repository: GitHubRepository
+    repository: AnyRepository
     commit_sha: str
     path: Path
     size_bytes: int
