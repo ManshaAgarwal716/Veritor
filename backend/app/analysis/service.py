@@ -1,10 +1,12 @@
+from __future__ import annotations
+
 import asyncio
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict
 
 from app.adapters.base import PackageAdapter, PackageMetadata
-from app.ai.investigator import AIInvestigator
 from app.ai.models import AIInvestigationResult
 from app.analysis.analyzer import analyze_package
 from app.analysis.models import AnalysisLimits, SecurityAnalysis
@@ -17,6 +19,9 @@ from app.scoring.risk import RiskAssessment, score_release
 from app.source import SourceHostAdapter
 from app.source.github import GitHubSourceResolver
 from app.source.models import MatchStatus, SourceMatch
+
+if TYPE_CHECKING:
+    from app.ai.investigator import AIInvestigator
 
 
 class ReleaseAnalysis(BaseModel):
