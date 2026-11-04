@@ -35,16 +35,30 @@ _DECODER_MODULE_FUNCTIONS = {
         "urlsafe_b64decode",
         "b32decode",
         "b16decode",
+        "b85decode",
+        "a85decode",
         "decodebytes",
         "decodestring",
     },
-    "binascii": {"unhexlify", "a2b_base64", "a2b_hex"},
+    "binascii": {"unhexlify", "a2b_base64", "a2b_hex", "a2b_hqx"},
     "codecs": {"decode"},
     "zlib": {"decompress"},
+    "gzip": {"decompress"},
+    "bz2": {"decompress"},
+    "lzma": {"decompress"},
+    "quopri": {"decodestring"},
 }
 
 _PROCESS_MODULE_FUNCTIONS = {
-    "subprocess": {"run", "Popen", "call", "check_call", "check_output"},
+    "subprocess": {
+        "run",
+        "Popen",
+        "call",
+        "check_call",
+        "check_output",
+        "getstatusoutput",
+        "getoutput",
+    },
     "os": {
         "system",
         "popen",
@@ -67,12 +81,16 @@ _PROCESS_MODULE_FUNCTIONS = {
         "execve",
         "execvp",
         "execvpe",
+        "posix_spawn",
+        "posix_spawnp",
     },
     "pty": {"spawn"},
+    "asyncio": {"create_subprocess_exec", "create_subprocess_shell"},
+    "commands": {"getoutput", "getstatusoutput"},
 }
 
 _PROCESS_INTERNALS = {
-    "ctypes": {"CDLL", "windll", "cdll", "WinDLL"},
+    "ctypes": {"CDLL", "windll", "cdll", "WinDLL", "OleDLL", "oledll"},
     "_posixsubprocess": {"fork_exec"},
 }
 
@@ -85,8 +103,11 @@ _NETWORK_MODULES = {
     "aiohttp",
     "socket",
     "websocket",
+    "websockets",
     "ftplib",
     "telnetlib",
+    "urllib3",
+    "paramiko",
 }
 
 _NETWORK_CALL_NAMES = {
@@ -96,6 +117,7 @@ _NETWORK_CALL_NAMES = {
     "delete",
     "patch",
     "head",
+    "options",
     "request",
     "urlopen",
     "urlretrieve",
@@ -115,7 +137,10 @@ _NETWORK_CALL_NAMES = {
 _DYNAMIC_IMPORT_FUNCTIONS = {
     "importlib.import_module",
     "__import__",
+    "builtins.__import__",
+    "__builtin__.__import__",
     "imp.load_module",
+    "imp.load_source",
 }
 
 _FS_READ_METHODS = {"read_text", "read_bytes", "open"}
@@ -149,6 +174,12 @@ class _PythonVisitor(ast.NodeVisitor):
         self.reported_environment: set[int] = set()
         # Variables that hold decoded data (e.g. payload = b64decode(...))
         self.decoded_variables: set[str] = set()
+        # Variables holding compiled code objects: var -> whether it contains decoded payload
+        self.compiled_variables: dict[str, bool] = {}
+        # Statically known string variables: var -> value
+        self.string_variables: dict[str, str] = {}
+        # Statically known command lists: var -> list of str
+        self.command_variables: dict[str, list[str]] = {}
         # Obfuscator-style variable names
         self.obfuscator_names: list[tuple[str, ast.AST]] = []
 
@@ -173,6 +204,8 @@ class _PythonVisitor(ast.NodeVisitor):
     def _static_string(self, node: ast.AST | None, depth: int = 0) -> str | None:
         if node is None or depth > 10:
             return None
+        if isinstance(node, ast.Name) and node.id in self.string_variables:
+            return self.string_variables[node.id]
         if isinstance(node, ast.Constant):
             if isinstance(node.value, str):
                 return node.value
@@ -182,10 +215,25 @@ class _PythonVisitor(ast.NodeVisitor):
                 except UnicodeDecodeError:
                     return node.value.decode("latin-1", errors="replace")
         elif isinstance(node, ast.JoinedStr):
-            # Format string with no dynamic expressions
-            if all(isinstance(part, ast.Constant) for part in node.values):
-                return "".join(str(p.value) for p in node.values if isinstance(p, ast.Constant))
-            return None
+            # Format string with static constants or known static variables
+            parts: list[str] = []
+            for part in node.values:
+                if isinstance(part, ast.Constant) and isinstance(part.value, (str, bytes)):
+                    val = (
+                        part.value
+                        if isinstance(part.value, str)
+                        else part.value.decode("utf-8", errors="replace")
+                    )
+                    parts.append(val)
+                elif isinstance(part, ast.FormattedValue):
+                    s = self._static_string(part.value, depth + 1)
+                    if s is not None:
+                        parts.append(s)
+                    else:
+                        return None
+                else:
+                    return None
+            return "".join(parts)
         elif isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
             left = self._static_string(node.left, depth + 1)
             right = self._static_string(node.right, depth + 1)
@@ -197,6 +245,11 @@ class _PythonVisitor(ast.NodeVisitor):
         if node is None or depth > 8:
             return []
         strings: list[str] = []
+        if isinstance(node, ast.Name):
+            if node.id in self.string_variables:
+                strings.append(self.string_variables[node.id])
+            elif node.id in self.command_variables:
+                strings.extend(self.command_variables[node.id])
         for child in ast.walk(node):
             if isinstance(child, ast.Constant) and isinstance(child.value, (str, bytes)):
                 val = (
@@ -205,6 +258,11 @@ class _PythonVisitor(ast.NodeVisitor):
                     else child.value.decode("utf-8", errors="replace")
                 )
                 strings.append(val)
+            elif isinstance(child, ast.Name):
+                if child.id in self.string_variables:
+                    strings.append(self.string_variables[child.id])
+                elif child.id in self.command_variables:
+                    strings.extend(self.command_variables[child.id])
         return strings
 
     def _resolve_call_target(self, node: ast.AST) -> tuple[str | None, str | None]:
@@ -228,7 +286,10 @@ class _PythonVisitor(ast.NodeVisitor):
                 base_name = node.value.id
                 module_name = self.module_aliases.get(base_name, base_name)
                 # Check for os.environ.get
-                if base_name in self.environment_vars or module_name == "os.environ":
+                if base_name in self.environment_vars or module_name in (
+                    "os.environ",
+                    "os.environb",
+                ):
                     return "os.environ", attr
                 return module_name, attr
 
@@ -256,7 +317,18 @@ class _PythonVisitor(ast.NodeVisitor):
             mod, fn = self._resolve_call_target(node.func)
             if mod in _DECODER_MODULE_FUNCTIONS and fn in _DECODER_MODULE_FUNCTIONS[mod]:
                 return True
-            if fn in {"b64decode", "unhexlify", "a2b_base64", "decompress"}:
+            if fn in {
+                "b64decode",
+                "urlsafe_b64decode",
+                "b32decode",
+                "b16decode",
+                "b85decode",
+                "a85decode",
+                "unhexlify",
+                "a2b_base64",
+                "a2b_hex",
+                "decompress",
+            }:
                 return True
         elif isinstance(node, ast.Name):
             if node.id in self.decoded_variables:
@@ -284,7 +356,9 @@ class _PythonVisitor(ast.NodeVisitor):
             full_name = f"{module}.{name}" if module else name
             self.func_aliases[asname] = full_name
 
-            if module == "os" and name in ("environ", "environb"):
+            if module in ("builtins", "__builtin__") and name in ("eval", "exec", "compile"):
+                self.global_aliases[asname] = name
+            elif module == "os" and name in ("environ", "environb"):
                 self.environment_vars.add(asname)
             elif module in _DECODER_MODULE_FUNCTIONS and name in _DECODER_MODULE_FUNCTIONS[module]:
                 self.func_aliases[asname] = f"{module}.{name}"
@@ -319,6 +393,31 @@ class _PythonVisitor(ast.NodeVisitor):
                 if isinstance(target, ast.Name):
                     self.decoded_variables.add(target.id)
 
+        # Check if RHS is a compile call
+        elif isinstance(node.value, ast.Call):
+            mod, fn = self._resolve_call_target(node.value.func)
+            if (mod in {None, "builtins", "__builtin__"} and fn == "compile") or (
+                fn is not None and fn in self.global_aliases
+            ):
+                is_dec = bool(node.value.args and self._is_decoder_node(node.value.args[0]))
+                for target in node.targets:
+                    if isinstance(target, ast.Name):
+                        self.compiled_variables[target.id] = is_dec
+
+        # Track static strings and static commands
+        static_val = self._static_string(node.value)
+        if static_val is not None:
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    self.string_variables[target.id] = static_val
+        elif isinstance(node.value, (ast.List, ast.Tuple)):
+            elem_strs = [self._static_string(el) for el in node.value.elts]
+            if all(s is not None for s in elem_strs):
+                cmd_list = [s for s in elem_strs if s is not None]
+                for target in node.targets:
+                    if isinstance(target, ast.Name):
+                        self.command_variables[target.id] = cmd_list
+
         self.generic_visit(node)
 
     def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
@@ -330,6 +429,25 @@ class _PythonVisitor(ast.NodeVisitor):
             elif self._is_decoder_node(node.value):
                 if isinstance(node.target, ast.Name):
                     self.decoded_variables.add(node.target.id)
+            elif isinstance(node.value, ast.Call):
+                mod, fn = self._resolve_call_target(node.value.func)
+                if (mod in {None, "builtins", "__builtin__"} and fn == "compile") or (
+                    fn is not None and fn in self.global_aliases
+                ):
+                    is_dec = bool(node.value.args and self._is_decoder_node(node.value.args[0]))
+                    if isinstance(node.target, ast.Name):
+                        self.compiled_variables[node.target.id] = is_dec
+
+            static_val = self._static_string(node.value)
+            if static_val is not None and isinstance(node.target, ast.Name):
+                self.string_variables[node.target.id] = static_val
+            elif isinstance(node.value, (ast.List, ast.Tuple)) and isinstance(
+                node.target, ast.Name
+            ):
+                elem_strs = [self._static_string(el) for el in node.value.elts]
+                if all(s is not None for s in elem_strs):
+                    self.command_variables[node.target.id] = [s for s in elem_strs if s is not None]
+
         self.generic_visit(node)
 
     def visit_Call(self, node: ast.Call) -> None:
@@ -337,7 +455,13 @@ class _PythonVisitor(ast.NodeVisitor):
         full_call = f"{mod}.{fn}" if mod else (fn or "")
 
         # 1. Dynamic Code Execution
-        if (mod is None and fn in {"eval", "exec", "compile"}) or fn in self.global_aliases:
+        is_dynamic_exec = False
+        if mod in {None, "builtins", "__builtin__"} and fn in {"eval", "exec", "compile"}:
+            is_dynamic_exec = True
+        elif fn is not None and fn in self.global_aliases:
+            is_dynamic_exec = True
+
+        if is_dynamic_exec:
             self._check_dynamic_execution(node)
 
         # 2. Process Execution
@@ -366,7 +490,19 @@ class _PythonVisitor(ast.NodeVisitor):
 
         # 7. Decoders
         elif (mod in _DECODER_MODULE_FUNCTIONS and fn in _DECODER_MODULE_FUNCTIONS[mod]) or (
-            fn in {"b64decode", "unhexlify", "a2b_base64", "decompress"}
+            fn
+            in {
+                "b64decode",
+                "urlsafe_b64decode",
+                "b32decode",
+                "b16decode",
+                "b85decode",
+                "a85decode",
+                "unhexlify",
+                "a2b_base64",
+                "a2b_hex",
+                "decompress",
+            }
         ):
             self._hit("OBF-004", node, Severity.INFO, FindingConfidence.HIGH, Signal.DECODE)
 
@@ -392,7 +528,11 @@ class _PythonVisitor(ast.NodeVisitor):
             return
 
         arg0 = node.args[0]
-        if self._is_decoder_node(arg0):
+        is_decoded = self._is_decoder_node(arg0)
+        if isinstance(arg0, ast.Name) and self.compiled_variables.get(arg0.id) is True:
+            is_decoded = True
+
+        if is_decoded:
             self._hit(
                 "EXEC-003",
                 node,
@@ -448,7 +588,9 @@ class _PythonVisitor(ast.NodeVisitor):
         strings = self._extract_strings(cmd_arg)
         joined_cmd = " ".join(strings)
 
-        if strings and _RISKY_COMMAND.search(joined_cmd):
+        if cmd_arg is not None and self._is_decoder_node(cmd_arg):
+            self._hit("PROC-004", node, Severity.HIGH, FindingConfidence.HIGH, Signal.PROCESS)
+        elif strings and _RISKY_COMMAND.search(joined_cmd):
             self._hit("PROC-004", node, Severity.HIGH, FindingConfidence.HIGH, Signal.PROCESS)
         elif self._is_static_command(cmd_arg):
             self._hit("PROC-002", node, Severity.LOW, FindingConfidence.HIGH, Signal.PROCESS)

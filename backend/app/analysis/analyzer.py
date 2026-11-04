@@ -72,7 +72,9 @@ def analyze_package(
     scanned = 0
     deadline = time.monotonic() + limits.deadline_seconds
     for target in _targets(package, report):
-        language = scannable_language(target.path) or _script_language(target.entry)
+        language = scannable_language(target.path) or _script_language(
+            target.entry, package, target.path
+        )
         if language is None:
             if target.path.lower().endswith(_OTHER_CODE_SUFFIXES):
                 gaps.append(
@@ -144,12 +146,22 @@ def _targets(package: FileTree, report: ComparisonReport | None) -> list[_Target
     return targets
 
 
-def _script_language(entry: InventoryEntry) -> str | None:
-    # Extensionless files with a shebang are often Node scripts. Others parse with errors,
+def _script_language(
+    entry: InventoryEntry, package: FileTree | None = None, path: str = ""
+) -> str | None:
+    # Extensionless files with a shebang are often Node or Python scripts. Others parse with errors,
     # which is reported as a gap.
-    return (
-        "javascript" if entry.content_type is ContentType.SCRIPT and not entry.extension else None
-    )
+    if entry.content_type is not ContentType.SCRIPT or entry.extension:
+        return None
+    if package is not None and path:
+        head = package.read(path, 128)
+        if head and head.startswith(b"#!"):
+            first_line = head.split(b"\n", 1)[0].lower()
+            if b"python" in first_line or b"pypy" in first_line:
+                return "python"
+            if b"node" in first_line or b"bun" in first_line or b"deno" in first_line:
+                return "javascript"
+    return "javascript"
 
 
 def _binding_gyp_added(report: ComparisonReport | None) -> bool:

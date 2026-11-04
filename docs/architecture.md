@@ -22,7 +22,7 @@ flowchart TD
     subgraph "Core Verification Pipeline"
         EXT --> COMP["Inventory & File Comparison Engine"]
         COMP --> CLASSIFY["Generated Artifact Intelligence"]
-        CLASSIFY --> SCANNER["Tree-Sitter AST Security Scanner"]
+        CLASSIFY --> SCANNER["Tree-Sitter & Python AST Security Scanner"]
         SCANNER --> PROV["Sigstore Cryptographic Provenance"]
         PROV --> RISK["Deterministic 0-100 Risk Engine"]
     end
@@ -73,12 +73,17 @@ flowchart TD
   - `UNCERTAIN`: Discrepancies without affirmative build evidence.
 
 ### 2.5 Static AST Security Scanner (`app.analysis`)
-- AST analysis powered by Tree-Sitter for JavaScript and TypeScript (`.js`, `.mjs`, `.cjs`, `.ts`, `.tsx`, `.mts`, `.cts`).
-- **Zero Execution**: Code is strictly parsed into syntax trees and never executed.
+- AST analysis powered by Tree-Sitter for JavaScript and TypeScript (`.js`, `.mjs`, `.cjs`, `.ts`, `.tsx`, `.mts`, `.cts`), and native Python `ast` parsing for Python source files (`.py`, `.pyw`, and extensionless Python scripts with shebangs).
+- **Zero Execution**: Code is strictly parsed into syntax trees and never executed under any circumstances.
 - **Differential Scanning**: Differentiates between pre-existing source patterns and newly added package modifications to eliminate false positives on legitimate APIs.
-- Rules cover 7 primary families:
-  1. `EXEC`: Dynamic execution (`eval`, `new Function`, `vm.runInContext`).
-  2. `PROC`: Process spawning (`child_process.exec`, `execSync`, `spawn`, `fork`).
+- Rules cover 7 primary families across both JS/TS and Python:
+  1. `EXEC`: Dynamic execution (`eval`, `exec`, `compile`, `new Function`, `vm.runInContext`).
+  2. `PROC`: Process spawning (`subprocess.run`, `Popen`, `os.system`, `child_process.exec`, `execSync`, `spawn`, `fork`).
+  3. `ENV`: Environment variable reading (`os.environ`, `os.getenv`, `process.env`).
+  4. `NET`: Network communication (`requests`, `urllib`, `httpx`, `aiohttp`, `fetch`, `http.request`, sockets).
+  5. `FS`: Sensitive filesystem reads and startup persistence (`open`, `Path.read_text`, `fs.readFile`, `/etc/cron`, `systemd`, `.bashrc`).
+  6. `OBF`: Obfuscated payloads, runtime decoders (`base64`, `zlib`, `gzip`, hex strings, character code joins).
+  7. `CORR`: Correlated multi-signal threats (`CORR-001` credentials + network exfiltration, `CORR-002` decode + execution, `CORR-003` network + process execution, `CORR-004` obfuscation + sensitive activity, `CORR-005` install-time execution in `setup.py` or npm lifecycle scripts).
   3. `ENV`: Environment inspection (`process.env`, credential dumps, API keys).
   4. `NET`: Network exfiltration (`http`, `https`, `fetch`, raw socket connections).
   5. `OBF`: Obfuscation (Base64 decoding, string hex encoding, Packer identifiers).
