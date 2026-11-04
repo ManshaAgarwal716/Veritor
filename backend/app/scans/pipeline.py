@@ -182,9 +182,7 @@ async def execute_scan_pipeline(
             95,
             "Running AI investigator (qwen2.5-coder:7b) on findings",
         )
-        ai_result = await ai_investigator.investigate(
-            metadata, match, report, security, risk, package_dir
-        )
+        ai_result = await ai_investigator.investigate(metadata, match, report, security, risk)
 
         # 11. Final report assembly
         completed_at = datetime.now(UTC)

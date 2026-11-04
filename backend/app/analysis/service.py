@@ -83,9 +83,7 @@ async def analyze_release(
 
     ai_result = None
     if ai_investigator is not None:
-        ai_result = await ai_investigator.investigate(
-            metadata, match, report, security, risk, work_dir / "package"
-        )
+        ai_result = await ai_investigator.investigate(metadata, match, report, security, risk)
 
     return ReleaseAnalysis(
         metadata=metadata,

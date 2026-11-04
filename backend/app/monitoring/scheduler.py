@@ -120,40 +120,50 @@ class ReleaseMonitoringScheduler:
             owns_client = True
 
         sem = asyncio.Semaphore(self.max_concurrency)
-        checked_count = 0
+        checked_count = len(entries)
         updates_detected = 0
         scans_triggered = 0
         details: list[dict[str, Any]] = []
 
         try:
-            for entry in entries:
-                checked_count += 1
+
+            async def _check_target(
+                idx: int,
+                eco: str,
+                pkg: str,
+                cur_ver: str | None,
+            ) -> tuple[bool, str | None]:
+                if idx > 0 and self.request_delay_seconds > 0:
+                    delay = min(self.request_delay_seconds * (idx % self.max_concurrency), 1.0)
+                    await asyncio.sleep(delay)
+                async with sem:
+                    return await check_package_update(
+                        client=client,
+                        ecosystem=eco,
+                        package_name=pkg,
+                        current_version=cur_ver,
+                    )
+
+            tasks = [
+                _check_target(i, entry.ecosystem, entry.package_name, entry.last_scanned_version)
+                for i, entry in enumerate(entries)
+            ]
+            results = await asyncio.gather(*tasks)
+
+            for entry, (has_update, latest_ver) in zip(entries, results, strict=False):
                 detail: dict[str, Any] = {
                     "ecosystem": entry.ecosystem,
                     "package_name": entry.package_name,
                     "previous_version": entry.last_scanned_version,
+                    "latest_version": latest_ver,
+                    "has_update": has_update,
+                    "scan_triggered": False,
                 }
-
-                # Rate-limit between consecutive package checks
-                if checked_count > 1 and self.request_delay_seconds > 0:
-                    await asyncio.sleep(self.request_delay_seconds)
-
-                async with sem:
-                    has_update, latest_ver = await check_package_update(
-                        client=client,
-                        ecosystem=entry.ecosystem,
-                        package_name=entry.package_name,
-                        current_version=entry.last_scanned_version,
-                    )
 
                 entry.last_checked_at = datetime.now(UTC)
                 if latest_ver:
                     entry.latest_version = latest_ver
                 entry.has_update = has_update
-
-                detail["latest_version"] = latest_ver
-                detail["has_update"] = has_update
-                detail["scan_triggered"] = False
 
                 if has_update and latest_ver:
                     updates_detected += 1
@@ -244,14 +254,43 @@ class ReleaseMonitoringScheduler:
             owns_client = True
 
         sem = asyncio.Semaphore(self.max_concurrency)
-        checked_count = 0
+        entries_list = list(entries.values())
+        checked_count = len(entries_list)
         updates_detected = 0
         scans_triggered = 0
         details: list[dict[str, Any]] = []
 
         try:
-            for entry in list(entries.values()):
-                checked_count += 1
+
+            async def _check_mem_target(
+                idx: int,
+                eco: str,
+                pkg: str,
+                cur_ver: str | None,
+            ) -> tuple[bool, str | None]:
+                if idx > 0 and self.request_delay_seconds > 0:
+                    delay = min(self.request_delay_seconds * (idx % self.max_concurrency), 1.0)
+                    await asyncio.sleep(delay)
+                async with sem:
+                    return await check_package_update(
+                        client=client,
+                        ecosystem=eco,
+                        package_name=pkg,
+                        current_version=cur_ver,
+                    )
+
+            tasks = [
+                _check_mem_target(
+                    i,
+                    str(entry.get("ecosystem", "npm")),
+                    str(entry.get("package_name", "")),
+                    entry.get("last_scanned_version"),
+                )
+                for i, entry in enumerate(entries_list)
+            ]
+            results = await asyncio.gather(*tasks)
+
+            for entry, (has_update, latest_ver) in zip(entries_list, results, strict=False):
                 eco = str(entry.get("ecosystem", "npm"))
                 pkg_name = str(entry.get("package_name", ""))
                 prev_ver = entry.get("last_scanned_version")
@@ -260,27 +299,15 @@ class ReleaseMonitoringScheduler:
                     "ecosystem": eco,
                     "package_name": pkg_name,
                     "previous_version": prev_ver,
+                    "latest_version": latest_ver,
+                    "has_update": has_update,
+                    "scan_triggered": False,
                 }
-
-                if checked_count > 1 and self.request_delay_seconds > 0:
-                    await asyncio.sleep(self.request_delay_seconds)
-
-                async with sem:
-                    has_update, latest_ver = await check_package_update(
-                        client=client,
-                        ecosystem=eco,
-                        package_name=pkg_name,
-                        current_version=prev_ver,
-                    )
 
                 entry["last_checked_at"] = datetime.now(UTC).isoformat()
                 if latest_ver:
                     entry["latest_version"] = latest_ver
                 entry["has_update"] = has_update
-
-                detail["latest_version"] = latest_ver
-                detail["has_update"] = has_update
-                detail["scan_triggered"] = False
 
                 if has_update and latest_ver:
                     updates_detected += 1

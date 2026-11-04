@@ -2,7 +2,6 @@
 
 import json
 import logging
-from pathlib import Path
 from typing import Any
 
 from app.adapters.base import PackageMetadata
@@ -56,7 +55,6 @@ class AIInvestigator:
         comparison: ComparisonReport | None,
         security: SecurityAnalysis,
         risk: RiskAssessment,
-        package_dir: Path | None = None,
     ) -> AIInvestigationResult:
         """Run AI investigation on deterministic findings and differing code."""
         findings = security.findings
