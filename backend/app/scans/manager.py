@@ -37,7 +37,7 @@ from app.schemas.scans import (
     ScanState,
     ScanStatusResponse,
 )
-from app.source.github import GitHubSourceResolver
+from app.source import MultiHostSourceResolver
 
 logger = logging.getLogger(__name__)
 
@@ -198,10 +198,10 @@ class ScanManager:
                 resolver = (
                     self._resolver_factory(client)
                     if self._resolver_factory
-                    else GitHubSourceResolver(
+                    else MultiHostSourceResolver(
                         client,
                         limits=self.settings.registry_limits(),
-                        token=self.settings.github_token,
+                        github_token=self.settings.github_token,
                     )
                 )
 

@@ -14,6 +14,7 @@ from app.comparison.models import ComparisonLimits, ComparisonReport
 from app.provenance.models import ProvenanceResult
 from app.provenance.npm import NpmProvenanceChecker
 from app.scoring.risk import RiskAssessment, score_release
+from app.source import SourceHostAdapter
 from app.source.github import GitHubSourceResolver
 from app.source.models import MatchStatus, SourceMatch
 
@@ -34,7 +35,7 @@ class ReleaseAnalysis(BaseModel):
 
 async def analyze_release(
     adapter: PackageAdapter,
-    resolver: GitHubSourceResolver,
+    resolver: SourceHostAdapter | GitHubSourceResolver,
     provenance_checker: NpmProvenanceChecker,
     name: str,
     version: str,

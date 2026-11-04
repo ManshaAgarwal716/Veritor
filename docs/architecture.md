@@ -49,17 +49,23 @@ flowchart TD
 - Strictly bounds maximum archive size, uncompressed byte totals, file count, entry depth, and compression ratio.
 - Strips unsafe POSIX permissions, enforcing `0600` file permissions on extracted content.
 
-### 2.3 Source Resolution (`app.source.github`)
-- Discovers upstream GitHub repository from package metadata.
+### 2.3 Multi-Host Source Resolution (`app.source`)
+- Implements pluggable `SourceHostAdapter` protocol with `MultiHostSourceResolver` dispatching requests across:
+  - **GitHub (`GitHubSourceResolver`)**: Resolves smart-HTTP git upload-pack refs, commits, and codeload archives.
+  - **GitLab (`GitLabSourceResolver`)**: Parses GitLab project paths and groups, discovers git refs via packet-line upload-pack stream, and retrieves commit archives via GitLab's archive endpoint (`/-/archive/{commit}/...`).
+  - **Bitbucket (`BitbucketSourceResolver`)**: Discovers git refs and downloads commit tarballs (`/get/{commit}.tar.gz`).
 - Matches release version to exact git commit using four fallback tiers:
   1. `RECORDED_COMMIT_AND_TAG`: Package declares commit and matching git tag exists.
   2. `PACKAGE_TAG`: Exact package-prefixed tag (e.g. `v1.2.0`, `@scope/pkg@1.2.0`).
   3. `VERSION_TAG`: Bare semver tag (e.g. `1.2.0`).
   4. `RECORDED_COMMIT`: Commit recorded in publish metadata.
-- **Strict Invariant**: If no exact commit can be confirmed, the resolver returns `UNCERTAIN`. Veritor never assumes or falls back to the repository's default branch.
+- **Strict Invariants**:
+  - If no exact commit can be confirmed, the resolver returns `UNCERTAIN`. Veritor never assumes or falls back to the repository's default branch.
+  - Unrecognized code hosting platforms return `UNCERTAIN` with `UncertainReason.UNSUPPORTED_HOST` honestly.
 
 ### 2.4 Inventory Comparison & Artifact Intelligence (`app.comparison`)
 - Computes SHA-256 hashes of all published files against repository files.
+- **In-Memory Read Caching (`FileTree`)**: Bounded in-memory read caching eliminates redundant filesystem reads, file descriptor allocations, and SHA-256 hash recalculations for manifests (`package.json`, `tsconfig.json`) and configuration files during scope discovery, evidence extraction, and diff computation.
 - Classifies differing files into:
   - `SOURCE_AUTHENTIC`: Exact match with repository source file.
   - `LIKELY_GENERATED`: Verified build artifact supported by build configs (`tsconfig.json`, bundlers), source maps (`.map`), and token similarity.

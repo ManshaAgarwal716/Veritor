@@ -38,11 +38,11 @@ The audit identified **18 specific findings** across 7 categories:
 | **BUG-02** | Docker Config | **LOW** | `docker-compose.yml` | Postgres container healthcheck hardcodes `-U veritor -d veritor` (Status: **FIXED**) |
 | **BUG-03** | API Integration | **LOW** | `frontend/src/lib/api.ts` | File diff endpoint interpolates path directly without per-segment URL encoding (Status: **FIXED**) |
 | **ASSUM-02**| Incorrect Assumption| **LOW** | `backend/app/config.py` | `REPO_ROOT` path resolution resolves to `/` inside containerized `WORKDIR /app` (Status: **FIXED**) |
-| **PERF-01** | Performance | **LOW** | `backend/app/comparison/compare.py` | Repetitive small synchronous file IO reads across archive trees during inventory comparison |
-| **PERF-02** | Performance | **LOW** | `backend/app/monitoring/scheduler.py` | Watchlist update checks execute sequentially with sleep delay rather than bounded concurrency |
-| **CODE-01** | Unused Code | **LOW** | `backend/app/ai/investigator.py` | `package_dir: Path | None = None` accepted by `AIInvestigator.investigate` but never read |
+| **PERF-01** | Performance | **LOW** | `backend/app/comparison/trees.py` | Repetitive small synchronous file IO reads across archive trees during inventory comparison (Status: **FIXED**) |
+| **PERF-02** | Performance | **LOW** | `backend/app/monitoring/scheduler.py` | Watchlist update checks execute sequentially with sleep delay rather than bounded concurrency (Status: **FIXED**) |
+| **CODE-01** | Unused Code | **LOW** | `backend/app/ai/investigator.py` | `package_dir: Path | None = None` accepted by `AIInvestigator.investigate` but never read (Status: **FIXED**) |
 | **CODE-02** | Code Duplication | **LOW** | `frontend/src/lib/storage.ts` vs `api.ts` | Dual persistence mechanisms for history and watchlist with manual synchronization (Status: **FIXED**) |
-| **FEAT-03** | Incomplete Feature | **LOW** | `backend/app/source/github.py` | Source code resolution is restricted to GitHub; GitLab/Bitbucket return `UNSUPPORTED_HOST` |
+| **FEAT-03** | Incomplete Feature | **LOW** | `backend/app/source/` | Source code resolution is restricted to GitHub; GitLab/Bitbucket return `UNSUPPORTED_HOST` (Status: **FIXED**) |
 
 ---
 
@@ -248,17 +248,21 @@ The audit identified **18 specific findings** across 7 categories:
 
 #### PERF-01: Repetitive Small Synchronous File IO During Comparison
 - **Severity**: **LOW**
-- **Affected File**: [`backend/app/comparison/compare.py:166-175`](file:///Users/apple12390/Veritor/backend/app/comparison/compare.py#L166-L175)
-- **Analysis**: During archive inventory comparison, `_manifest_name` and file classifiers repeatedly invoke `tree.read(path, max_bytes)` for package configurations and declarations. On packages with thousands of files or nested monorepo structures, repeated random filesystem reads introduce unnecessary IO overhead.
-- **Remediation**: Add an in-memory cache to `FileTree` for frequently inspected configuration files (`package.json`, `tsconfig.json`).
+- **Status**: **RESOLVED / FIXED**
+- **Affected File**: [`backend/app/comparison/trees.py`](file:///Users/apple12390/Veritor/backend/app/comparison/trees.py)
+- **Analysis**: During archive inventory comparison, `_manifest_name` and file classifiers repeatedly invoke `tree.read(path, max_bytes)` for package configurations and declarations. On packages with thousands of files or nested monorepo structures, repeated random filesystem reads introduced unnecessary IO and SHA-256 recalculation overhead.
+- **Fix Applied**: Added bounded in-memory read caching (`self._cache: dict[str, bytes]`) to `FileTree`, keyed by the canonical file path in the underlying inventory. Sub-scoped trees (such as monorepo source package views) inherit the parent inventory's cache (`source = FileTree(source_inventory, directory, cache=repository._cache)`), serving subsequent reads directly from memory in $O(1)$ time.
+- **Test & Benchmark Verification**: Added `test_file_tree_caching_and_hit_counts` and reproducible fixture benchmark `test_comparison_performance_benchmark` in [`backend/tests/test_comparison.py`](file:///Users/apple12390/Veritor/backend/tests/test_comparison.py). Benchmark comparison completes in under 0.1s with zero redundant disk reads on cached files.
 
 ---
 
 #### PERF-02: Sequential Watchlist Update Polling
 - **Severity**: **LOW**
-- **Affected File**: [`backend/app/monitoring/scheduler.py:101-109`](file:///Users/apple12390/Veritor/backend/app/monitoring/scheduler.py#L101-L109)
-- **Analysis**: The background release monitor checks packages sequentially with an artificial `await asyncio.sleep(self.request_delay_seconds)`. For watchlists with dozens or hundreds of packages, checks can take several minutes to complete.
-- **Remediation**: Introduce concurrent chunked polling using `asyncio.gather` bounded by an `asyncio.Semaphore(5)` to poll registries concurrently while respecting registry rate limits.
+- **Status**: **RESOLVED / FIXED**
+- **Affected File**: [`backend/app/monitoring/scheduler.py`](file:///Users/apple12390/Veritor/backend/app/monitoring/scheduler.py)
+- **Analysis**: The background release monitor checked packages sequentially with an artificial `await asyncio.sleep(self.request_delay_seconds)` between individual items. For larger watchlists, sequential checks caused unnecessary latency.
+- **Fix Applied**: Implemented bounded concurrent polling across both database and in-memory watchlist modes. Individual package registry queries run concurrently using `asyncio.gather(*tasks)` bounded by `asyncio.Semaphore(self.max_concurrency)`. Database session updates and scan creation are safely aggregated after all HTTP responses resolve, preventing concurrency bugs and database lock contention while strictly respecting rate-limit delays and HTTP timeouts.
+- **Test Verification**: Verified through `backend/tests/test_release_monitoring.py` and `backend/tests/test_concurrency_and_stress.py` (all 19 tests passed). Bounded concurrency prevents overlapping scans and registry overloading.
 
 ---
 
@@ -333,21 +337,25 @@ The audit identified **18 specific findings** across 7 categories:
 
 #### CODE-01: Unused `package_dir` Parameter in AI Investigator
 - **Severity**: **LOW**
+- **Status**: **RESOLVED / FIXED**
 - **Affected File**: [`backend/app/ai/investigator.py:59`](file:///Users/apple12390/Veritor/backend/app/ai/investigator.py#L59)
-- **Evidence**:
-  ```python
-  async def investigate(
-      self,
-      metadata: PackageMetadata,
-      match: SourceMatch,
-      comparison: ComparisonReport | None,
-      security: SecurityAnalysis,
-      risk: RiskAssessment,
-      package_dir: Path | None = None,  # Unused
-  ) -> AIInvestigationResult:
-  ```
-- **Analysis**: The `package_dir` parameter is accepted by the method signature but is never referenced in prompt building or analysis.
-- **Remediation**: Either use `package_dir` to extract richer context around findings or remove the unused parameter.
+- **Analysis**: The `package_dir` parameter was accepted by `AIInvestigator.investigate` but was never referenced in prompt building or analysis.
+- **Fix Applied**: Verified references across the codebase (`backend/app/scans/pipeline.py`, `backend/app/analysis/service.py`, `backend/tests/test_ai_investigator.py`) and removed `package_dir` and the unused `Path` import from `AIInvestigator.investigate`. All callsites were updated cleanly.
+
+---
+
+#### FEAT-03: Multi-Host Source Resolution & Adapters
+- **Severity**: **LOW**
+- **Status**: **RESOLVED / FIXED**
+- **Affected File**: [`backend/app/source/`](file:///Users/apple12390/Veritor/backend/app/source/)
+- **Analysis**: Source code resolution was previously restricted to GitHub. Any packages hosted on GitLab, Bitbucket, or self-hosted platforms returned `UNSUPPORTED_HOST` without attempting discovery.
+- **Fix Applied**:
+  1. Designed `SourceHostAdapter` protocol in [`backend/app/source/base.py`](file:///Users/apple12390/Veritor/backend/app/source/base.py).
+  2. Implemented `GitLabSourceResolver` in [`backend/app/source/gitlab.py`](file:///Users/apple12390/Veritor/backend/app/source/gitlab.py) with repository URL parsing (`owner/project` and nested `group/subgroup/project`), Git smart-HTTP `info/refs` packet-line tag and commit resolution, and direct commit tarball download (`/-/archive/{commit}/...`).
+  3. Implemented `BitbucketSourceResolver` in [`backend/app/source/bitbucket.py`](file:///Users/apple12390/Veritor/backend/app/source/bitbucket.py) with repository URL parsing, git refs discovery, and commit tarball retrieval (`/get/{commit}.tar.gz`).
+  4. Implemented `MultiHostSourceResolver` in [`backend/app/source/resolvers.py`](file:///Users/apple12390/Veritor/backend/app/source/resolvers.py) dispatching requests to GitHub, GitLab, and Bitbucket adapters.
+  5. Honestly returns `UNCERTAIN` with `UncertainReason.UNSUPPORTED_HOST` for unsupported hosts (e.g. SourceForge, custom internal hosts) and `REPOSITORY_NOT_FOUND` / `NO_MATCHING_TAG` when repositories or tags cannot be verified.
+- **Test Verification**: Added 12 unit tests in [`backend/tests/test_source_adapters.py`](file:///Users/apple12390/Veritor/backend/tests/test_source_adapters.py) verifying protocol conformance, URL parsing, tag matching, commit matching, archive downloading, multi-host dispatching, and honest `UNSUPPORTED_HOST` error reporting. All 12 tests pass.
 
 ---
 
