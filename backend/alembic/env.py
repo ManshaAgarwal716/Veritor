@@ -21,12 +21,13 @@ target_metadata = Base.metadata
 
 
 def get_url() -> str:
+    url = config.get_main_option("sqlalchemy.url")
+    if url:
+        return url
     settings = get_settings()
     if settings.database_url:
         return settings.database_url
-    return config.get_main_option(
-        "sqlalchemy.url", "postgresql+psycopg://veritor:veritor@localhost:5432/veritor"
-    )
+    return "postgresql+psycopg://veritor:veritor@localhost:5432/veritor"
 
 
 def run_migrations_offline() -> None:
