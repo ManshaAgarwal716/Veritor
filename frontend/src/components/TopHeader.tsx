@@ -55,6 +55,7 @@ export function TopHeader({
           onClick={onToggleMobileMenu}
           className="lg:hidden p-1.5 rounded-md text-slate-400 hover:text-white hover:bg-surface-800 transition-colors"
           title="Toggle Navigation Menu"
+          aria-label="Toggle Navigation Drawer"
         >
           <Menu className="w-5 h-5" />
         </button>

@@ -41,15 +41,15 @@ export function ReportDashboard({
     switch (lvl) {
       case "CRITICAL":
         return {
-          text: "text-rose-400",
-          bg: "bg-rose-500/10",
-          border: "border-rose-500/30",
+          text: "text-soc-critical",
+          bg: "bg-soc-critical-bg",
+          border: "border-soc-critical-border",
           badge: "bg-rose-500/20 text-rose-300 border-rose-500/40",
           gauge: "#f43f5e",
         };
       case "HIGH":
         return {
-          text: "text-orange-400",
+          text: "text-soc-high",
           bg: "bg-orange-500/10",
           border: "border-orange-500/30",
           badge: "bg-orange-500/20 text-orange-300 border-orange-500/40",
@@ -57,7 +57,7 @@ export function ReportDashboard({
         };
       case "MEDIUM":
         return {
-          text: "text-amber-400",
+          text: "text-soc-medium",
           bg: "bg-amber-500/10",
           border: "border-amber-500/30",
           badge: "bg-amber-500/20 text-amber-300 border-amber-500/40",
@@ -66,7 +66,7 @@ export function ReportDashboard({
       case "LOW":
       default:
         return {
-          text: "text-emerald-400",
+          text: "text-soc-verified",
           bg: "bg-emerald-500/10",
           border: "border-emerald-500/30",
           badge: "bg-emerald-500/20 text-emerald-300 border-emerald-500/40",
@@ -100,7 +100,10 @@ export function ReportDashboard({
   async function handleExportJson() {
     try {
       setExportingJson(true);
-      const blob = await exportScanJson(report.scan_id);
+      const data = await exportScanJson(report.scan_id);
+      const blob = new Blob([JSON.stringify(data, null, 2)], {
+        type: "application/json",
+      });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -109,18 +112,8 @@ export function ReportDashboard({
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
-    } catch {
-      // Fallback in-browser export
-      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(report, null, 2));
-      const downloadAnchor = document.createElement("a");
-      downloadAnchor.setAttribute("href", dataStr);
-      downloadAnchor.setAttribute(
-        "download",
-        `veritor-${report.package_name}-${report.version}-${report.scan_id}.json`
-      );
-      document.body.appendChild(downloadAnchor);
-      downloadAnchor.click();
-      downloadAnchor.remove();
+    } catch (err) {
+      alert("Failed to export JSON report: " + String(err));
     } finally {
       setExportingJson(false);
     }
@@ -148,14 +141,14 @@ export function ReportDashboard({
   return (
     <div className="w-full space-y-6">
       {/* Top Banner Card */}
-      <div className="p-6 rounded-xl bg-slate-900/90 border border-slate-800 shadow-xl">
+      <div className="p-6 rounded-xl bg-surface-850 border border-surface-border shadow-xl">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs uppercase font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+              <span className="text-xs uppercase font-mono px-2 py-0.5 rounded bg-violet-950/60 text-violet-300 border border-violet-800">
                 {report.ecosystem}
               </span>
-              <h1 className="text-xl sm:text-2xl font-bold font-mono text-slate-100">
+              <h1 className="text-xl sm:text-2xl font-bold font-mono text-white">
                 {report.package_name}
               </h1>
               <span className="text-sm sm:text-base font-mono text-slate-400">
@@ -178,12 +171,12 @@ export function ReportDashboard({
               )}
               {report.source_match?.repository_url && (
                 <span className="flex items-center gap-1 truncate max-w-xs sm:max-w-md">
-                  <GitBranch className="w-3.5 h-3.5 text-slate-500" />
+                  <GitBranch className="w-3.5 h-3.5 text-violet-400" />
                   <a
                     href={report.source_match.repository_url}
                     target="_blank"
                     rel="noreferrer"
-                    className="hover:text-emerald-400 underline decoration-slate-600"
+                    className="hover:text-violet-300 underline decoration-surface-700"
                   >
                     {report.source_match.repository_url.replace("https://github.com/", "")}
                   </a>
@@ -196,7 +189,7 @@ export function ReportDashboard({
             <button
               onClick={handleExportJson}
               disabled={exportingJson}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-mono text-slate-300 transition-colors disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-surface-800 hover:bg-surface-750 border border-surface-border text-xs font-mono text-slate-300 transition-colors disabled:opacity-50"
             >
               <Download className="w-3.5 h-3.5 text-slate-400" />
               <span>{exportingJson ? "Exporting..." : "Export JSON"}</span>
@@ -204,21 +197,21 @@ export function ReportDashboard({
             <button
               onClick={handleExportPdf}
               disabled={exportingPdf}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-xs font-mono text-emerald-300 transition-colors disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-violet-600/20 hover:bg-violet-600/30 border border-violet-500/40 text-xs font-mono text-violet-300 transition-colors disabled:opacity-50"
             >
-              <FileText className="w-3.5 h-3.5 text-emerald-400" />
+              <FileText className="w-3.5 h-3.5 text-violet-400" />
               <span>{exportingPdf ? "Generating PDF..." : "Export PDF"}</span>
             </button>
           </div>
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex items-center gap-2 border-t border-slate-800 mt-6 pt-4 overflow-x-auto text-xs font-mono">
+        <div className="flex items-center gap-2 border-t border-surface-border mt-6 pt-4 overflow-x-auto text-xs font-mono">
           <button
             onClick={() => setActiveReportTab("overview")}
             className={`px-3 py-1.5 rounded-md transition-colors ${
               activeReportTab === "overview"
-                ? "bg-slate-800 text-emerald-400 border border-emerald-500/30 font-semibold"
+                ? "bg-surface-800 text-violet-300 border border-violet-500/40 font-semibold shadow-sm"
                 : "text-slate-400 hover:text-slate-200"
             }`}
           >
@@ -228,13 +221,13 @@ export function ReportDashboard({
             onClick={() => setActiveReportTab("files")}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-colors ${
               activeReportTab === "files"
-                ? "bg-slate-800 text-cyan-400 border border-cyan-500/30 font-semibold"
+                ? "bg-surface-800 text-lavender-300 border border-lavender-500/40 font-semibold shadow-sm"
                 : "text-slate-400 hover:text-slate-200"
             }`}
           >
             <span>Files &amp; Diffs</span>
             {comparison?.summary && (
-              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-900 text-slate-300 border border-slate-700">
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-surface-950 text-slate-300 border border-surface-border">
                 {comparison.summary.total_package_files}
               </span>
             )}
@@ -243,7 +236,7 @@ export function ReportDashboard({
             onClick={() => setActiveReportTab("findings")}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-colors ${
               activeReportTab === "findings"
-                ? "bg-slate-800 text-rose-400 border border-rose-500/30 font-semibold"
+                ? "bg-surface-800 text-rose-300 border border-rose-500/40 font-semibold shadow-sm"
                 : "text-slate-400 hover:text-slate-200"
             }`}
           >
@@ -258,13 +251,13 @@ export function ReportDashboard({
             onClick={() => setActiveReportTab("provenance")}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-colors ${
               activeReportTab === "provenance"
-                ? "bg-slate-800 text-amber-400 border border-amber-500/30 font-semibold"
+                ? "bg-surface-800 text-violet-300 border border-violet-500/40 font-semibold shadow-sm"
                 : "text-slate-400 hover:text-slate-200"
             }`}
           >
             <span>Provenance</span>
             {provenance?.status && (
-              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-900 text-slate-300 border border-slate-700">
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-surface-950 text-slate-300 border border-surface-border">
                 {provenance.status}
               </span>
             )}
@@ -273,7 +266,7 @@ export function ReportDashboard({
             onClick={() => setActiveReportTab("ai")}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-colors ${
               activeReportTab === "ai"
-                ? "bg-slate-800 text-violet-400 border border-violet-500/30 font-semibold"
+                ? "bg-surface-800 text-violet-300 border border-violet-500/40 font-semibold shadow-sm"
                 : "text-slate-400 hover:text-slate-200"
             }`}
           >
@@ -301,7 +294,7 @@ export function ReportDashboard({
                   <span className="text-xs font-mono text-slate-400">/ 100</span>
                 </div>
               </div>
-              <div className="mt-4 pt-3 border-t border-slate-800/80 text-xs font-mono text-slate-300">
+              <div className="mt-4 pt-3 border-t border-surface-border text-xs font-mono text-slate-300">
                 Level: <span className={`font-bold ${colors.text}`}>{level}</span>
                 {risk?.confidence !== undefined && (
                   <span className="text-slate-400 block mt-0.5">
@@ -312,7 +305,7 @@ export function ReportDashboard({
             </div>
 
             {/* Differential Summary */}
-            <div className="p-5 rounded-xl bg-slate-900/90 border border-slate-800 flex flex-col justify-between">
+            <div className="p-5 rounded-xl bg-surface-850 border border-surface-border flex flex-col justify-between">
               <div>
                 <span className="text-xs uppercase font-mono tracking-wider text-slate-400">
                   Source Diffs
@@ -329,13 +322,13 @@ export function ReportDashboard({
                   </span>
                 </div>
               </div>
-              <div className="mt-4 pt-3 border-t border-slate-800 text-xs font-mono text-slate-400">
+              <div className="mt-4 pt-3 border-t border-surface-border text-xs font-mono text-slate-400">
                 <span>{comparison?.summary?.total_package_files ?? 0} files in package</span>
               </div>
             </div>
 
             {/* Security Findings Summary */}
-            <div className="p-5 rounded-xl bg-slate-900/90 border border-slate-800 flex flex-col justify-between">
+            <div className="p-5 rounded-xl bg-surface-850 border border-surface-border flex flex-col justify-between">
               <div>
                 <span className="text-xs uppercase font-mono tracking-wider text-slate-400">
                   Static Findings
@@ -343,7 +336,7 @@ export function ReportDashboard({
                 <div className="flex items-baseline gap-2 mt-2">
                   <span
                     className={`text-3xl font-extrabold font-mono ${
-                      (security?.findings?.length ?? 0) > 0 ? "text-rose-400" : "text-emerald-400"
+                      (security?.findings?.length ?? 0) > 0 ? "text-soc-critical" : "text-emerald-400"
                     }`}
                   >
                     {security?.findings?.length ?? 0}
@@ -351,13 +344,13 @@ export function ReportDashboard({
                   <span className="text-xs font-mono text-slate-400">detected</span>
                 </div>
               </div>
-              <div className="mt-4 pt-3 border-t border-slate-800 text-xs font-mono text-slate-400">
+              <div className="mt-4 pt-3 border-t border-surface-border text-xs font-mono text-slate-400">
                 <span>{security?.gaps?.length ?? 0} scanner limitations</span>
               </div>
             </div>
 
             {/* Provenance Card */}
-            <div className="p-5 rounded-xl bg-slate-900/90 border border-slate-800 flex flex-col justify-between">
+            <div className="p-5 rounded-xl bg-surface-850 border border-surface-border flex flex-col justify-between">
               <div>
                 <span className="text-xs uppercase font-mono tracking-wider text-slate-400">
                   Provenance
@@ -369,14 +362,14 @@ export function ReportDashboard({
                         ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
                         : provenance?.status === "NOT_VERIFIED"
                         ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
-                        : "bg-slate-800 text-slate-300 border-slate-700"
+                        : "bg-surface-800 text-slate-300 border-surface-border"
                     }`}
                   >
                     {provenance?.status || "UNAVAILABLE"}
                   </span>
                 </div>
               </div>
-              <div className="mt-4 pt-3 border-t border-slate-800 text-xs font-mono text-slate-400 truncate">
+              <div className="mt-4 pt-3 border-t border-surface-border text-xs font-mono text-slate-400 truncate">
                 <span>{provenance?.sigstore_verified ? "Sigstore Verified" : "Unsigned Build"}</span>
               </div>
             </div>
@@ -384,11 +377,11 @@ export function ReportDashboard({
 
           {/* Release Comparison / Evolution Card (when previous release exists) */}
           {comparisonData && comparisonData.base_version !== "none" && (
-            <div className="p-5 rounded-xl bg-slate-900/90 border border-slate-800 space-y-3">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
+            <div className="p-5 rounded-xl bg-surface-850 border border-surface-border space-y-3">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-surface-border pb-3">
                 <div className="flex items-center gap-2">
-                  <GitBranch className="w-4 h-4 text-sky-400" />
-                  <h3 className="font-mono text-sm font-semibold text-slate-200">
+                  <GitBranch className="w-4 h-4 text-violet-400" />
+                  <h3 className="font-mono text-sm font-semibold text-white">
                     Release Evolution: {comparisonData.base_version} → {comparisonData.head_version}
                   </h3>
                 </div>
@@ -399,7 +392,7 @@ export function ReportDashboard({
                         ? "bg-rose-500/20 text-rose-300 border-rose-500/30"
                         : comparisonData.risk_change.score_delta < 0
                         ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
-                        : "bg-slate-800 text-slate-400 border-slate-700"
+                        : "bg-surface-800 text-slate-400 border-surface-border"
                     }`}
                   >
                     {comparisonData.risk_change.score_delta > 0 ? (
@@ -417,27 +410,27 @@ export function ReportDashboard({
               </p>
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 text-xs font-mono">
-                <div className="p-2.5 rounded-lg bg-slate-800/60 border border-slate-700/50">
+                <div className="p-2.5 rounded-lg bg-surface-900 border border-surface-border">
                   <span className="text-slate-400 block">Newly Added</span>
                   <span className="text-base font-bold text-emerald-400">
                     +{comparisonData.file_changes.newly_added.length}
                   </span>
                 </div>
-                <div className="p-2.5 rounded-lg bg-slate-800/60 border border-slate-700/50">
+                <div className="p-2.5 rounded-lg bg-surface-900 border border-surface-border">
                   <span className="text-slate-400 block">Newly Modified</span>
                   <span className="text-base font-bold text-amber-400">
                     ~{comparisonData.file_changes.newly_modified.length}
                   </span>
                 </div>
-                <div className="p-2.5 rounded-lg bg-slate-800/60 border border-slate-700/50">
+                <div className="p-2.5 rounded-lg bg-surface-900 border border-surface-border">
                   <span className="text-slate-400 block">New Findings</span>
-                  <span className={`text-base font-bold ${comparisonData.finding_changes.new_findings.length > 0 ? "text-rose-400" : "text-slate-400"}`}>
+                  <span className={`text-base font-bold ${comparisonData.finding_changes.new_findings.length > 0 ? "text-soc-critical" : "text-slate-400"}`}>
                     {comparisonData.finding_changes.new_findings.length}
                   </span>
                 </div>
-                <div className="p-2.5 rounded-lg bg-slate-800/60 border border-slate-700/50">
+                <div className="p-2.5 rounded-lg bg-surface-900 border border-surface-border">
                   <span className="text-slate-400 block">Suspicious Artifacts</span>
-                  <span className={`text-base font-bold ${comparisonData.file_changes.new_suspicious_artifacts.length > 0 ? "text-rose-400" : "text-emerald-400"}`}>
+                  <span className={`text-base font-bold ${comparisonData.file_changes.new_suspicious_artifacts.length > 0 ? "text-soc-critical" : "text-emerald-400"}`}>
                     {comparisonData.file_changes.new_suspicious_artifacts.length}
                   </span>
                 </div>
@@ -447,8 +440,8 @@ export function ReportDashboard({
 
           {/* Hard Floors Notice (if triggered) */}
           {risk?.floors && risk.floors.some((f) => f.triggered) && (
-            <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/40 space-y-2">
-              <div className="flex items-center gap-2 text-rose-400 font-mono font-bold text-sm">
+            <div className="p-4 rounded-xl bg-soc-critical-bg border border-soc-critical-border space-y-2">
+              <div className="flex items-center gap-2 text-soc-critical font-mono font-bold text-sm">
                 <AlertOctagon className="w-4 h-4" />
                 <span>Deterministic Hard Security Floor Triggered</span>
               </div>
@@ -457,7 +450,7 @@ export function ReportDashboard({
                   .filter((f) => f.triggered)
                   .map((floor, i) => (
                     <div key={i} className="flex items-start gap-2">
-                      <span className="text-rose-400 font-bold">•</span>
+                      <span className="text-soc-critical font-bold">•</span>
                       <span>
                         <strong>{floor.name}</strong>: Enforced floor of {floor.min_score} points ({floor.reason})
                       </span>
@@ -470,10 +463,10 @@ export function ReportDashboard({
           {/* Contributing Factors & Recommendations 2-Column */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Contributing Factors */}
-            <div className="p-5 rounded-xl bg-slate-900/90 border border-slate-800 space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                <h3 className="font-mono text-sm font-semibold text-slate-200 flex items-center gap-2">
-                  <Layers className="w-4 h-4 text-emerald-400" />
+            <div className="p-5 rounded-xl bg-surface-850 border border-surface-border space-y-4">
+              <div className="flex items-center justify-between border-b border-surface-border pb-3">
+                <h3 className="font-mono text-sm font-semibold text-white flex items-center gap-2">
+                  <Layers className="w-4 h-4 text-violet-400" />
                   Contributing Risk Factors
                 </h3>
                 <span className="text-xs font-mono text-slate-400">
@@ -486,7 +479,7 @@ export function ReportDashboard({
                   {risk.factors.map((f, idx) => (
                     <div
                       key={idx}
-                      className="p-3 rounded-lg bg-slate-950 border border-slate-800 text-xs font-mono flex items-start justify-between gap-3"
+                      className="p-3 rounded-lg bg-surface-950 border border-surface-border text-xs font-mono flex items-start justify-between gap-3"
                     >
                       <div>
                         <span className="font-semibold text-slate-200">{f.factor}</span>
@@ -498,7 +491,7 @@ export function ReportDashboard({
                             ? "bg-rose-500/20 text-rose-300"
                             : f.points > 0
                             ? "bg-amber-500/20 text-amber-300"
-                            : "bg-slate-800 text-slate-400"
+                            : "bg-surface-800 text-slate-400"
                         }`}
                       >
                         +{f.points}
@@ -514,10 +507,10 @@ export function ReportDashboard({
             </div>
 
             {/* Recommendations & Limitations */}
-            <div className="p-5 rounded-xl bg-slate-900/90 border border-slate-800 space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                <h3 className="font-mono text-sm font-semibold text-slate-200 flex items-center gap-2">
-                  <ShieldCheck className="w-4 h-4 text-cyan-400" />
+            <div className="p-5 rounded-xl bg-surface-850 border border-surface-border space-y-4">
+              <div className="flex items-center justify-between border-b border-surface-border pb-3">
+                <h3 className="font-mono text-sm font-semibold text-white flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-lavender-400" />
                   Actionable Recommendations
                 </h3>
               </div>
@@ -527,9 +520,9 @@ export function ReportDashboard({
                   {risk.recommendations.map((rec, i) => (
                     <li
                       key={i}
-                      className="p-3 rounded-lg bg-slate-950 border border-slate-800 text-xs font-mono text-slate-300 flex items-start gap-2.5"
+                      className="p-3 rounded-lg bg-surface-950 border border-surface-border text-xs font-mono text-slate-300 flex items-start gap-2.5"
                     >
-                      <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
+                      <CheckCircle2 className="w-4 h-4 text-violet-400 shrink-0 mt-0.5" />
                       <span>{rec}</span>
                     </li>
                   ))}
@@ -542,7 +535,7 @@ export function ReportDashboard({
 
               {/* Limitations Disclosure */}
               {risk?.limitations && risk.limitations.length > 0 && (
-                <div className="pt-2 border-t border-slate-800">
+                <div className="pt-2 border-t border-surface-border">
                   <h4 className="text-[11px] uppercase font-mono tracking-wider text-slate-400 mb-2">
                     Analysis Limitations
                   </h4>

@@ -58,7 +58,7 @@ export function FileExplorer({
       case "MODIFIED":
         return <FileDiff className="w-4 h-4 text-amber-400 shrink-0" />;
       case "REMOVED":
-        return <FileCode className="w-4 h-4 text-rose-400 shrink-0" />;
+        return <FileCode className="w-4 h-4 text-soc-critical shrink-0" />;
       case "IDENTICAL":
       default:
         return <FileCheck className="w-4 h-4 text-slate-500 shrink-0" />;
@@ -70,7 +70,7 @@ export function FileExplorer({
     switch (cls) {
       case "SUSPICIOUS":
         return (
-          <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30">
+          <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-soc-critical-bg text-rose-300 border border-soc-critical-border">
             SUSPICIOUS
           </span>
         );
@@ -82,7 +82,7 @@ export function FileExplorer({
         );
       case "LIKELY_GENERATED":
         return (
-          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-violet-950/60 text-violet-300 border border-violet-800">
             GENERATED
           </span>
         );
@@ -98,9 +98,9 @@ export function FileExplorer({
   };
 
   return (
-    <div className="w-full h-full flex flex-col bg-slate-900/90 rounded-xl border border-slate-800 overflow-hidden">
+    <div className="w-full h-full flex flex-col bg-surface-850 rounded-xl border border-surface-border overflow-hidden">
       {/* Header & Controls */}
-      <div className="p-3.5 border-b border-slate-800 space-y-2.5">
+      <div className="p-3.5 border-b border-surface-border space-y-2.5">
         <div className="relative">
           <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
           <input
@@ -108,14 +108,14 @@ export function FileExplorer({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search files by path or extension..."
-            className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-xs font-mono text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition-colors"
+            className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-surface-950 border border-surface-border text-xs font-mono text-slate-200 placeholder-slate-500 focus:outline-none focus:border-violet-500 transition-colors"
           />
         </div>
 
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-mono">
           <span className="text-slate-500 mr-1 flex items-center gap-1">
-            <Filter className="w-3 h-3" /> Filter:
+            <Filter className="w-3 h-3 text-violet-400" /> Filter:
           </span>
 
           {/* Classification Filter Buttons */}
@@ -125,8 +125,8 @@ export function FileExplorer({
               onClick={() => setClassificationFilter(c)}
               className={`px-2 py-0.5 rounded transition-colors ${
                 classificationFilter === c
-                  ? "bg-slate-700 text-emerald-300 font-semibold border border-slate-600"
-                  : "bg-slate-950 text-slate-400 hover:text-slate-200 border border-slate-800"
+                  ? "bg-violet-950/60 text-violet-200 font-semibold border border-violet-700/60"
+                  : "bg-surface-950 text-slate-400 hover:text-slate-200 border border-surface-border"
               }`}
             >
               {c === "ALL" ? "All Artifacts" : c.replace("_", " ")}
@@ -140,8 +140,8 @@ export function FileExplorer({
               onClick={() => setStatusFilter(statusFilter === s ? "ALL" : s)}
               className={`px-2 py-0.5 rounded transition-colors ${
                 statusFilter === s
-                  ? "bg-cyan-950/80 text-cyan-300 font-semibold border border-cyan-800"
-                  : "bg-slate-950 text-slate-400 hover:text-slate-200 border border-slate-800"
+                  ? "bg-surface-800 text-lavender-300 font-semibold border border-lavender-500/40"
+                  : "bg-surface-950 text-slate-400 hover:text-slate-200 border border-surface-border"
               }`}
             >
               {s}
@@ -151,7 +151,7 @@ export function FileExplorer({
       </div>
 
       {/* Files List */}
-      <div className="flex-1 overflow-y-auto max-h-[600px] divide-y divide-slate-800/60 font-mono text-xs">
+      <div className="flex-1 overflow-y-auto max-h-[600px] divide-y divide-surface-border font-mono text-xs">
         {filteredFiles.length > 0 ? (
           filteredFiles.map((file) => {
             const isSelected = selectedFilePath === file.path;
@@ -161,8 +161,8 @@ export function FileExplorer({
                 onClick={() => onSelectFile(file.path)}
                 className={`flex items-center justify-between p-2.5 cursor-pointer transition-colors ${
                   isSelected
-                    ? "bg-slate-800 text-emerald-300 border-l-2 border-emerald-400 pl-2"
-                    : "hover:bg-slate-800/50 text-slate-300"
+                    ? "bg-violet-950/40 text-violet-200 border-l-2 border-violet-500 pl-2"
+                    : "hover:bg-surface-800/60 text-slate-300"
                 }`}
               >
                 <div className="flex items-center gap-2 truncate pr-2">
@@ -197,10 +197,10 @@ export function FileExplorer({
       </div>
 
       {/* Footer Summary */}
-      <div className="p-2.5 border-t border-slate-800 bg-slate-950/40 text-[11px] font-mono text-slate-400 flex items-center justify-between">
+      <div className="p-2.5 border-t border-surface-border bg-surface-950/40 text-[11px] font-mono text-slate-400 flex items-center justify-between">
         <span>Showing {filteredFiles.length} of {files.length} files</span>
         {selectedFilePath && (
-          <span className="text-emerald-400 truncate max-w-[200px]" title={selectedFilePath}>
+          <span className="text-violet-300 truncate max-w-[200px]" title={selectedFilePath}>
             {selectedFilePath}
           </span>
         )}
