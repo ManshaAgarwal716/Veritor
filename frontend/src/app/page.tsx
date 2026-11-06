@@ -1,7 +1,9 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { Navbar } from "../components/Navbar";
+import { Sidebar, NavTab } from "../components/Sidebar";
+import { TopHeader } from "../components/TopHeader";
+import { OverviewDashboard } from "../components/OverviewDashboard";
 import { LandingHero } from "../components/LandingHero";
 import { ScannerForm } from "../components/ScannerForm";
 import { ProgressTracker } from "../components/ProgressTracker";
@@ -15,6 +17,8 @@ import { ScanHistoryView } from "../components/ScanHistoryView";
 import { WatchlistView } from "../components/WatchlistView";
 import { SettingsView } from "../components/SettingsView";
 import {
+  checkBackendHealth,
+  checkOllamaConnection,
   createScan,
   getFileDiff,
   getScanFiles,
@@ -38,15 +42,20 @@ import {
   ScanStatusResponse,
   WatchlistItem,
 } from "../lib/types";
-import { AlertOctagon } from "lucide-react";
+import { AlertOctagon, X } from "lucide-react";
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<
-    "scanner" | "report" | "history" | "watchlist" | "settings"
-  >("scanner");
+  const [activeTab, setActiveTab] = useState<NavTab>("overview");
   const [activeReportTab, setActiveReportTab] = useState<
     "overview" | "files" | "findings" | "provenance" | "ai"
   >("overview");
+
+  // Mobile drawer state
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Live telemetry status
+  const [backendOnline, setBackendOnline] = useState<boolean | null>(null);
+  const [ollamaOnline, setOllamaOnline] = useState<boolean | null>(null);
 
   // Form input state
   const [formParams, setFormParams] = useState<{
@@ -75,6 +84,34 @@ export default function Home() {
 
   // Polling ref
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Telemetry check loop
+  useEffect(() => {
+    let mounted = true;
+
+    async function checkStatus() {
+      try {
+        const backend = await checkBackendHealth();
+        if (mounted) setBackendOnline(backend.status === "ok");
+      } catch {
+        if (mounted) setBackendOnline(false);
+      }
+
+      try {
+        const ollama = await checkOllamaConnection();
+        if (mounted) setOllamaOnline(ollama.connected);
+      } catch {
+        if (mounted) setOllamaOnline(false);
+      }
+    }
+
+    checkStatus();
+    const interval = setInterval(checkStatus, 15000);
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, []);
 
   // Listen for storage events across tabs or components
   useEffect(() => {
@@ -258,176 +295,243 @@ export default function Home() {
     setWatchlist(synced);
   };
 
+  const handleNavSelect = (tab: NavTab) => {
+    setActiveTab(tab);
+    setMobileMenuOpen(false);
+  };
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-emerald-500/30 selection:text-emerald-200">
-      {/* Top Navigation */}
-      <Navbar
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        hasActiveReport={!!scanReport}
-        historyCount={history.length}
-        watchlistCount={watchlist.length}
-      />
+    <div className="flex h-screen bg-surface-950 text-slate-100 font-sans overflow-hidden select-none">
+      {/* Desktop Left Sidebar */}
+      <div className="hidden lg:flex shrink-0">
+        <Sidebar
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          hasActiveReport={!!scanReport}
+          historyCount={history.length}
+          watchlistCount={watchlist.length}
+          backendOnline={backendOnline}
+          ollamaOnline={ollamaOnline}
+        />
+      </div>
 
-      {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* Error notification banner */}
-        {scanError && (
-          <div className="mb-6 p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 font-mono text-xs flex items-center justify-between gap-3 shadow-lg">
-            <div className="flex items-center gap-2.5">
-              <AlertOctagon className="w-5 h-5 text-rose-400 shrink-0" />
-              <span>{scanError}</span>
+      {/* Mobile Sidebar Overlay Drawer */}
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden flex">
+          <div
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm"
+            onClick={() => setMobileMenuOpen(false)}
+          />
+          <div className="relative flex flex-col w-72 max-w-[85vw] h-full bg-surface-900 border-r border-surface-border z-10">
+            <div className="p-3 flex justify-end">
+              <button
+                onClick={() => setMobileMenuOpen(false)}
+                className="p-1 rounded text-slate-400 hover:text-white hover:bg-surface-800"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
-            <button
-              onClick={() => setScanError(null)}
-              className="text-rose-400 hover:text-rose-200 text-xs uppercase font-bold"
-            >
-              Dismiss
-            </button>
-          </div>
-        )}
-
-        {/* TAB: SCANNER */}
-        {activeTab === "scanner" && (
-          <div className="space-y-6">
-            {!isScanning && !scanStatus && (
-              <LandingHero onSelectSample={handleSelectSample} />
-            )}
-
-            <ScannerForm
-              key={`${formParams.ecosystem}-${formParams.packageName}-${formParams.version}`}
-              onSubmit={handleStartScan}
-              isLoading={isScanning}
-              initialEcosystem={formParams.ecosystem}
-              initialPackage={formParams.packageName}
-              initialVersion={formParams.version}
-              onAddToWatchlist={handleAddToWatchlist}
+            <Sidebar
+              activeTab={activeTab}
+              setActiveTab={handleNavSelect}
+              hasActiveReport={!!scanReport}
+              historyCount={history.length}
+              watchlistCount={watchlist.length}
+              backendOnline={backendOnline}
+              ollamaOnline={ollamaOnline}
             />
-
-            {/* Real-time Progress Display */}
-            {scanStatus && (
-              <ProgressTracker
-                status={scanStatus}
-                onRetry={() => {
-                  if (formParams.packageName && formParams.version) {
-                    handleStartScan({
-                      ecosystem: formParams.ecosystem,
-                      package_name: formParams.packageName,
-                      version: formParams.version,
-                    });
-                  }
-                }}
-              />
-            )}
           </div>
-        )}
+        </div>
+      )}
 
-        {/* TAB: REPORT */}
-        {activeTab === "report" && scanReport && (
-          <div className="space-y-6">
-            <ReportDashboard
-              report={scanReport}
-              activeReportTab={activeReportTab}
-              setActiveReportTab={setActiveReportTab}
-            />
+      {/* Right App Column */}
+      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
+        {/* Top Header */}
+        <TopHeader
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          scanReport={scanReport}
+          backendOnline={backendOnline}
+          ollamaOnline={ollamaOnline}
+          onToggleMobileMenu={() => setMobileMenuOpen(true)}
+        />
 
-            {/* Sub-tab 1: Files & Diffs View */}
-            {activeReportTab === "files" && (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-                <div className="lg:col-span-1">
-                  <FileExplorer
-                    files={files}
-                    selectedFilePath={selectedFilePath}
-                    onSelectFile={handleSelectFile}
-                  />
+        {/* Main Workspace Canvas */}
+        <main className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-6 select-text">
+          <div className="max-w-7xl mx-auto space-y-6">
+            {/* Error notification banner */}
+            {scanError && (
+              <div className="p-4 rounded-lg bg-soc-critical-bg border border-soc-critical-border text-rose-300 font-mono text-xs flex items-center justify-between gap-3 shadow-lg">
+                <div className="flex items-center gap-2.5">
+                  <AlertOctagon className="w-4 h-4 text-soc-critical shrink-0" />
+                  <span>{scanError}</span>
                 </div>
-                <div className="lg:col-span-2">
-                  <DiffViewer
-                    diff={selectedDiff}
-                    isLoading={isDiffLoading}
-                    filePath={selectedFilePath || "No file selected"}
-                  />
-                </div>
+                <button
+                  onClick={() => setScanError(null)}
+                  className="text-rose-400 hover:text-rose-200 text-xs uppercase font-bold"
+                >
+                  Dismiss
+                </button>
               </div>
             )}
 
-            {/* Sub-tab 2: Security Findings View */}
-            {activeReportTab === "findings" && (
-              <FindingsViewer
-                findings={scanReport.security?.findings || []}
-                gaps={scanReport.security?.gaps || []}
-                aiExplanations={scanReport.ai?.explanations || []}
-                onSelectFile={handleSelectFile}
+            {/* TAB 1: OVERVIEW DASHBOARD */}
+            {activeTab === "overview" && (
+              <OverviewDashboard
+                history={history}
+                watchlist={watchlist}
+                onStartScan={(eco, pkg, ver) => {
+                  setFormParams({ ecosystem: eco, packageName: pkg, version: ver });
+                  handleStartScan({ ecosystem: eco, package_name: pkg, version: ver });
+                }}
+                onOpenReport={handleSelectHistoryScan}
+                onNavigateToScanner={() => setActiveTab("scanner")}
+                onNavigateToWatchlist={() => setActiveTab("watchlist")}
               />
             )}
 
-            {/* Sub-tab 3: Provenance View */}
-            {activeReportTab === "provenance" && (
-              <ProvenanceCard
-                provenance={scanReport.provenance}
-                packageName={scanReport.package_name}
-                version={scanReport.version}
+            {/* TAB 2: SCANNER */}
+            {activeTab === "scanner" && (
+              <div className="space-y-6">
+                {!isScanning && !scanStatus && (
+                  <LandingHero onSelectSample={handleSelectSample} />
+                )}
+
+                <ScannerForm
+                  key={`${formParams.ecosystem}-${formParams.packageName}-${formParams.version}`}
+                  onSubmit={handleStartScan}
+                  isLoading={isScanning}
+                  initialEcosystem={formParams.ecosystem}
+                  initialPackage={formParams.packageName}
+                  initialVersion={formParams.version}
+                  onAddToWatchlist={handleAddToWatchlist}
+                />
+
+                {/* Real-time Progress Display */}
+                {scanStatus && (
+                  <ProgressTracker
+                    status={scanStatus}
+                    onRetry={() => {
+                      if (formParams.packageName && formParams.version) {
+                        handleStartScan({
+                          ecosystem: formParams.ecosystem,
+                          package_name: formParams.packageName,
+                          version: formParams.version,
+                        });
+                      }
+                    }}
+                  />
+                )}
+              </div>
+            )}
+
+            {/* TAB 3: REPORT WORKSPACE */}
+            {activeTab === "report" && scanReport && (
+              <div className="space-y-6">
+                <ReportDashboard
+                  report={scanReport}
+                  activeReportTab={activeReportTab}
+                  setActiveReportTab={setActiveReportTab}
+                />
+
+                {/* Sub-tab 1: Files & Diffs View */}
+                {activeReportTab === "files" && (
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+                    <div className="lg:col-span-1">
+                      <FileExplorer
+                        files={files}
+                        selectedFilePath={selectedFilePath}
+                        onSelectFile={handleSelectFile}
+                      />
+                    </div>
+                    <div className="lg:col-span-2">
+                      <DiffViewer
+                        diff={selectedDiff}
+                        isLoading={isDiffLoading}
+                        filePath={selectedFilePath || "No file selected"}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Sub-tab 2: Security Findings View */}
+                {activeReportTab === "findings" && (
+                  <FindingsViewer
+                    findings={scanReport.security?.findings || []}
+                    gaps={scanReport.security?.gaps || []}
+                    aiExplanations={scanReport.ai?.explanations || []}
+                    onSelectFile={handleSelectFile}
+                  />
+                )}
+
+                {/* Sub-tab 3: Provenance View */}
+                {activeReportTab === "provenance" && (
+                  <ProvenanceCard
+                    provenance={scanReport.provenance}
+                    packageName={scanReport.package_name}
+                    version={scanReport.version}
+                  />
+                )}
+
+                {/* Sub-tab 4: AI Investigator View */}
+                {activeReportTab === "ai" && (
+                  <AIInvestigatorView
+                    ai={scanReport.ai}
+                    packageName={scanReport.package_name}
+                    version={scanReport.version}
+                  />
+                )}
+              </div>
+            )}
+
+            {/* TAB 4: HISTORY */}
+            {activeTab === "history" && (
+              <ScanHistoryView
+                history={history}
+                onSelectScan={handleSelectHistoryScan}
+                onClearHistory={() => setHistory([])}
+                onScanNew={() => setActiveTab("scanner")}
               />
             )}
 
-            {/* Sub-tab 4: AI Investigator View */}
-            {activeReportTab === "ai" && (
-              <AIInvestigatorView
-                ai={scanReport.ai}
-                packageName={scanReport.package_name}
-                version={scanReport.version}
+            {/* TAB 5: WATCHLIST */}
+            {activeTab === "watchlist" && (
+              <WatchlistView
+                watchlist={watchlist}
+                onTriggerScan={(ecosystem, pkgName, ver) => {
+                  setFormParams({ ecosystem, packageName: pkgName, version: ver || "" });
+                  setActiveTab("scanner");
+                }}
+                onRefresh={async () => {
+                  const items = await syncWatchlist();
+                  setWatchlist(items);
+                }}
               />
             )}
+
+            {/* TAB 6: SETTINGS */}
+            {activeTab === "settings" && <SettingsView />}
           </div>
-        )}
+        </main>
 
-        {/* TAB: HISTORY */}
-        {activeTab === "history" && (
-          <ScanHistoryView
-            history={history}
-            onSelectScan={handleSelectHistoryScan}
-            onClearHistory={() => setHistory([])}
-            onScanNew={() => setActiveTab("scanner")}
-          />
-        )}
-
-        {/* TAB: WATCHLIST */}
-        {activeTab === "watchlist" && (
-          <WatchlistView
-            watchlist={watchlist}
-            onTriggerScan={(ecosystem, pkgName, ver) => {
-              setFormParams({ ecosystem, packageName: pkgName, version: ver || "" });
-              setActiveTab("scanner");
-            }}
-            onRefresh={async () => {
-              const items = await syncWatchlist();
-              setWatchlist(items);
-            }}
-          />
-        )}
-
-        {/* TAB: SETTINGS */}
-        {activeTab === "settings" && <SettingsView />}
-      </main>
-
-      {/* Cyber Footer */}
-      <footer className="border-t border-slate-900 bg-slate-950 py-6 text-center text-xs font-mono text-slate-500">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+        {/* Console Status Bar */}
+        <footer className="h-7 border-t border-surface-border bg-surface-900/95 px-4 flex items-center justify-between text-[11px] font-mono text-slate-400 select-none">
           <div className="flex items-center gap-2">
-            <span className="font-bold text-slate-300">Veritor</span>
-            <span>— Supply Chain Integrity Analysis Engine</span>
+            <span className="font-bold text-slate-300">Veritor Security Console</span>
+            <span>•</span>
+            <span className="text-slate-400">Software Supply Chain Intelligence</span>
           </div>
-          <div className="flex items-center gap-4 text-slate-400">
+          <div className="hidden sm:flex items-center gap-3 text-slate-400">
             <span>Deterministic Scoring</span>
             <span>•</span>
-            <span>Sigstore Cryptography</span>
+            <span>Sigstore Provenance</span>
             <span>•</span>
-            <span>AST Static Walk</span>
+            <span>AST Static Scan</span>
             <span>•</span>
             <span>Ollama AI</span>
           </div>
-        </div>
-      </footer>
+        </footer>
+      </div>
     </div>
   );
 }
