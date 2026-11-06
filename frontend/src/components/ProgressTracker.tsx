@@ -11,6 +11,8 @@ import {
   ShieldAlert,
   Lock,
   Layers,
+  RotateCw,
+  Terminal,
 } from "lucide-react";
 import { ScanStage, ScanStatusResponse } from "../lib/types";
 
@@ -39,57 +41,61 @@ export function ProgressTracker({ status, onRetry }: ProgressTrackerProps) {
   const isCompleted = status.status === "completed";
 
   return (
-    <div className="w-full max-w-3xl mx-auto my-6 p-6 rounded-xl bg-slate-900/90 border border-slate-800 shadow-2xl space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-4">
+    <div className="w-full max-w-3xl mx-auto my-6 p-6 rounded-xl bg-surface-850 border border-surface-border shadow-2xl space-y-6">
+      {/* Header telemetry */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-surface-border pb-4">
         <div>
           <div className="flex items-center gap-2">
-            <span className="text-xs uppercase font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+            <span className="text-[11px] uppercase font-mono px-2 py-0.5 rounded bg-violet-950/60 text-violet-300 border border-violet-800">
               {status.ecosystem}
             </span>
-            <span className="text-base sm:text-lg font-mono font-bold text-slate-100">
+            <span className="text-base sm:text-lg font-mono font-bold text-white">
               {status.package_name}@{status.version}
             </span>
           </div>
-          <p className="text-xs text-slate-400 mt-1 font-mono">
-            Scan ID: {status.scan_id}
+          <p className="text-xs text-slate-400 mt-1 font-mono flex items-center gap-1.5">
+            <Terminal className="w-3.5 h-3.5 text-slate-500" />
+            <span>Scan ID:</span>
+            <span className="text-slate-300">{status.scan_id}</span>
           </p>
         </div>
 
         <div className="flex items-center gap-2">
           {isFailed ? (
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-rose-500/20 border border-rose-500/40 text-rose-300 text-xs font-mono font-medium">
-              <AlertOctagon className="w-4 h-4 text-rose-400" />
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-soc-critical-bg border border-soc-critical-border text-soc-critical text-xs font-mono font-medium">
+              <AlertOctagon className="w-4 h-4 text-soc-critical" />
               FAILED
             </span>
           ) : isCompleted ? (
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-mono font-medium">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-emerald-950/40 border border-emerald-700/50 text-emerald-300 text-xs font-mono font-medium">
               <CheckCircle2 className="w-4 h-4 text-emerald-400" />
               COMPLETED
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 text-xs font-mono font-medium animate-pulse">
-              <CircleDashed className="w-4 h-4 text-cyan-400 animate-spin" />
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-violet-950/50 border border-violet-700/50 text-violet-300 text-xs font-mono font-medium animate-pulse">
+              <CircleDashed className="w-4 h-4 text-violet-400 animate-spin" />
               ANALYZING
             </span>
           )}
         </div>
       </div>
 
-      {/* Progress Bar */}
+      {/* Progress Bar & Current Activity */}
       <div className="space-y-2">
         <div className="flex items-center justify-between text-xs font-mono">
-          <span className="text-slate-300">{status.message || "Running pipeline stages..."}</span>
-          <span className="text-emerald-400 font-semibold">{status.progress_percent}%</span>
+          <span className="text-slate-300 truncate max-w-[80%]">
+            {status.message || "Running verification pipeline stages..."}
+          </span>
+          <span className="text-violet-400 font-semibold">{status.progress_percent}%</span>
         </div>
-        <div className="w-full h-2 rounded-full bg-slate-950 overflow-hidden border border-slate-800">
+        <div className="w-full h-2 rounded-full bg-surface-950 overflow-hidden border border-surface-border">
           <div
             className={`h-full transition-all duration-300 ease-out rounded-full ${
               isFailed
-                ? "bg-rose-500"
+                ? "bg-soc-critical"
                 : isCompleted
                 ? "bg-emerald-500"
-                : "bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-400"
+                : "bg-gradient-to-r from-violet-600 via-violet-500 to-lavender-400"
             }`}
             style={{ width: `${Math.max(5, Math.min(100, status.progress_percent))}%` }}
           />
@@ -98,18 +104,21 @@ export function ProgressTracker({ status, onRetry }: ProgressTrackerProps) {
 
       {/* Error Banner if Failed */}
       {isFailed && (
-        <div className="p-4 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-200 text-xs font-mono space-y-2">
-          <div className="flex items-center gap-2 font-bold text-rose-400">
+        <div className="p-4 rounded-lg bg-soc-critical-bg border border-soc-critical-border text-rose-200 text-xs font-mono space-y-2">
+          <div className="flex items-center gap-2 font-bold text-soc-critical">
             <AlertOctagon className="w-4 h-4" />
             <span>Analysis Interrupted</span>
           </div>
-          <p className="text-slate-300">{status.error || "The scan encountered an unexpected error."}</p>
+          <p className="text-slate-300 leading-relaxed">
+            {status.error || "The scan encountered an unexpected pipeline execution error."}
+          </p>
           {onRetry && (
             <button
               onClick={onRetry}
-              className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded bg-rose-600/30 hover:bg-rose-600/50 border border-rose-500/40 text-rose-200 font-mono text-xs transition-colors"
+              className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded bg-surface-800 hover:bg-surface-750 border border-soc-critical-border text-rose-200 font-mono text-xs transition-colors"
             >
-              Retry Scan
+              <RotateCw className="w-3.5 h-3.5" />
+              <span>Retry Scan</span>
             </button>
           )}
         </div>
@@ -117,30 +126,33 @@ export function ProgressTracker({ status, onRetry }: ProgressTrackerProps) {
 
       {/* Pipeline Stage Steps */}
       <div className="pt-2">
-        <h4 className="text-xs uppercase tracking-wider font-mono text-slate-400 mb-3">
+        <h4 className="text-xs uppercase tracking-wider font-mono text-slate-400 mb-3 font-semibold">
           Verification Pipeline Stages
         </h4>
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-xs font-mono">
           {STAGES_ORDER.map((stage, idx) => {
             const Icon = stage.icon;
-            const isStageComplete = isCompleted || (currentStageIndex > idx);
-            const isStageCurrent = !isCompleted && !isFailed && (currentStageIndex === idx || (currentStageIndex === -1 && idx === 0));
+            const isStageComplete = isCompleted || currentStageIndex > idx;
+            const isStageCurrent =
+              !isCompleted &&
+              !isFailed &&
+              (currentStageIndex === idx || (currentStageIndex === -1 && idx === 0));
 
             return (
               <div
                 key={stage.key}
                 className={`flex items-center gap-2.5 p-2 rounded-lg border transition-all ${
                   isStageComplete
-                    ? "bg-slate-950/40 border-slate-800 text-slate-300"
+                    ? "bg-surface-900 border-surface-border text-slate-300"
                     : isStageCurrent
-                    ? "bg-slate-800/80 border-cyan-500/40 text-cyan-200 shadow-sm"
-                    : "bg-slate-950/20 border-slate-900 text-slate-600"
+                    ? "bg-surface-800 border-violet-500/50 text-violet-200 shadow-sm ring-1 ring-violet-500/20"
+                    : "bg-surface-950/40 border-surface-900 text-slate-600"
                 }`}
               >
                 {isStageComplete ? (
                   <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
                 ) : isStageCurrent ? (
-                  <CircleDashed className="w-4 h-4 text-cyan-400 animate-spin shrink-0" />
+                  <CircleDashed className="w-4 h-4 text-violet-400 animate-spin shrink-0" />
                 ) : (
                   <Icon className="w-4 h-4 text-slate-600 shrink-0" />
                 )}
