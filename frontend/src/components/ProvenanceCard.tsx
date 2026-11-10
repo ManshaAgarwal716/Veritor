@@ -52,9 +52,9 @@ export function ProvenanceCard({
       case "INVALID":
         return {
           icon: XCircle,
-          color: "text-rose-400",
-          bg: "bg-rose-500/10",
-          border: "border-rose-500/30",
+          color: "text-soc-critical",
+          bg: "bg-soc-critical-bg",
+          border: "border-soc-critical-border",
           badge: "bg-rose-500/20 text-rose-300 border-rose-500/40",
           label: "INVALID ATTESTATION",
           desc: "Signature mismatch or tampered payload attestation detected.",
@@ -74,9 +74,9 @@ export function ProvenanceCard({
         return {
           icon: Lock,
           color: "text-slate-400",
-          bg: "bg-slate-900",
-          border: "border-slate-800",
-          badge: "bg-slate-800 text-slate-400 border-slate-700",
+          bg: "bg-surface-850",
+          border: "border-surface-border",
+          badge: "bg-surface-800 text-slate-400 border-surface-border",
           label: "PROVENANCE UNAVAILABLE",
           desc: "Package was published without Sigstore cryptographic provenance attestations.",
         };
@@ -90,16 +90,16 @@ export function ProvenanceCard({
     <div className="w-full space-y-6 font-mono text-xs">
       {/* Main Status Header Card */}
       <div className={`p-6 rounded-xl border ${statusConfig.bg} ${statusConfig.border} shadow-lg space-y-4`}>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-surface-border pb-4">
           <div className="flex items-center gap-3">
-            <div className={`p-2.5 rounded-lg bg-slate-950 border ${statusConfig.border}`}>
+            <div className={`p-2.5 rounded-lg bg-surface-950 border ${statusConfig.border}`}>
               <StatusIcon className={`w-6 h-6 ${statusConfig.color}`} />
             </div>
             <div>
               <span className={`px-2.5 py-0.5 rounded text-xs font-bold border ${statusConfig.badge}`}>
                 {statusConfig.label}
               </span>
-              <h2 className="text-sm sm:text-base font-bold text-slate-200 mt-1">
+              <h2 className="text-sm sm:text-base font-bold text-white mt-1">
                 Build &amp; Origin Attestation
               </h2>
             </div>
@@ -117,9 +117,9 @@ export function ProvenanceCard({
         {/* Verification Checkpoints Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 pt-2">
           {/* Sigstore */}
-          <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 space-y-1">
-            <span className="text-[10px] uppercase text-slate-500 flex items-center gap-1">
-              <Key className="w-3 h-3" /> Sigstore Attestation
+          <div className="p-3 rounded-lg bg-surface-950 border border-surface-border space-y-1">
+            <span className="text-[10px] uppercase text-slate-400 flex items-center gap-1">
+              <Key className="w-3 h-3 text-violet-400" /> Sigstore Attestation
             </span>
             <div className="flex items-center gap-1.5 font-bold">
               {provenance?.sigstore_verified ? (
@@ -137,9 +137,9 @@ export function ProvenanceCard({
           </div>
 
           {/* GitHub Actions Runner */}
-          <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 space-y-1">
-            <span className="text-[10px] uppercase text-slate-500 flex items-center gap-1">
-              <ShieldCheck className="w-3 h-3" /> CI/CD Identity
+          <div className="p-3 rounded-lg bg-surface-950 border border-surface-border space-y-1">
+            <span className="text-[10px] uppercase text-slate-400 flex items-center gap-1">
+              <ShieldCheck className="w-3 h-3 text-lavender-400" /> CI/CD Identity
             </span>
             <div className="truncate font-bold text-slate-200" title={provenance?.build_runner || "None"}>
               {provenance?.build_runner ? "GitHub Actions" : "Unsigned / Direct"}
@@ -147,9 +147,9 @@ export function ProvenanceCard({
           </div>
 
           {/* Source Repo Match */}
-          <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 space-y-1">
-            <span className="text-[10px] uppercase text-slate-500 flex items-center gap-1">
-              <GitBranch className="w-3 h-3" /> Repository Match
+          <div className="p-3 rounded-lg bg-surface-950 border border-surface-border space-y-1">
+            <span className="text-[10px] uppercase text-slate-400 flex items-center gap-1">
+              <GitBranch className="w-3 h-3 text-violet-400" /> Repository Match
             </span>
             <div className="flex items-center gap-1.5 font-bold">
               {provenance?.repository_matched ? (
@@ -164,9 +164,9 @@ export function ProvenanceCard({
           </div>
 
           {/* Commit Match */}
-          <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 space-y-1">
-            <span className="text-[10px] uppercase text-slate-500 flex items-center gap-1">
-              <GitCommit className="w-3 h-3" /> Commit SHA Match
+          <div className="p-3 rounded-lg bg-surface-950 border border-surface-border space-y-1">
+            <span className="text-[10px] uppercase text-slate-400 flex items-center gap-1">
+              <GitCommit className="w-3 h-3 text-violet-400" /> Commit SHA Match
             </span>
             <div className="flex items-center gap-1.5 font-bold">
               {provenance?.commit_matched ? (
@@ -184,12 +184,12 @@ export function ProvenanceCard({
 
       {/* Reasons & Transparency Details */}
       {provenance?.reasons && provenance.reasons.length > 0 && (
-        <div className="p-5 rounded-xl bg-slate-900/90 border border-slate-800 space-y-3">
-          <h3 className="text-slate-200 font-bold text-sm">Verification Reasons &amp; Logs</h3>
+        <div className="p-5 rounded-xl bg-surface-850 border border-surface-border space-y-3">
+          <h3 className="text-white font-bold text-sm">Verification Reasons &amp; Logs</h3>
           <ul className="space-y-2">
             {provenance.reasons.map((reason, i) => (
-              <li key={i} className="p-2.5 rounded bg-slate-950 border border-slate-800 text-slate-300 flex items-start gap-2">
-                <span className="text-cyan-400 font-bold">•</span>
+              <li key={i} className="p-2.5 rounded bg-surface-950 border border-surface-border text-slate-300 flex items-start gap-2">
+                <span className="text-violet-400 font-bold">•</span>
                 <span>{reason}</span>
               </li>
             ))}
@@ -198,23 +198,23 @@ export function ProvenanceCard({
       )}
 
       {/* Source & Build Identity Details */}
-      <div className="p-5 rounded-xl bg-slate-900/90 border border-slate-800 space-y-3">
-        <h3 className="text-slate-200 font-bold text-sm">Attestation Metadata</h3>
+      <div className="p-5 rounded-xl bg-surface-850 border border-surface-border space-y-3">
+        <h3 className="text-white font-bold text-sm">Attestation Metadata</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div className="p-3 rounded bg-slate-950 border border-slate-800">
-            <span className="text-slate-500 block text-[10px] uppercase">Build Signer</span>
+          <div className="p-3 rounded bg-surface-950 border border-surface-border">
+            <span className="text-slate-400 block text-[10px] uppercase">Build Signer</span>
             <span className="text-slate-300 break-all">{provenance?.build_signer || "None (Unsigned)"}</span>
           </div>
-          <div className="p-3 rounded bg-slate-950 border border-slate-800">
-            <span className="text-slate-500 block text-[10px] uppercase">Source Repository</span>
+          <div className="p-3 rounded bg-surface-950 border border-surface-border">
+            <span className="text-slate-400 block text-[10px] uppercase">Source Repository</span>
             <span className="text-slate-300 break-all">{provenance?.source_repository || "Unknown"}</span>
           </div>
-          <div className="p-3 rounded bg-slate-950 border border-slate-800">
-            <span className="text-slate-500 block text-[10px] uppercase">Attested Commit SHA</span>
+          <div className="p-3 rounded bg-surface-950 border border-surface-border">
+            <span className="text-slate-400 block text-[10px] uppercase">Attested Commit SHA</span>
             <span className="text-slate-300 break-all">{provenance?.build_commit_sha || "None"}</span>
           </div>
-          <div className="p-3 rounded bg-slate-950 border border-slate-800">
-            <span className="text-slate-500 block text-[10px] uppercase">Package Integrity (SHA-512)</span>
+          <div className="p-3 rounded bg-surface-950 border border-surface-border">
+            <span className="text-slate-400 block text-[10px] uppercase">Package Integrity (SHA-512)</span>
             <span className="text-slate-300 break-all">
               {provenance?.package_integrity_match !== undefined
                 ? provenance.package_integrity_match
@@ -228,4 +228,3 @@ export function ProvenanceCard({
     </div>
   );
 }
-

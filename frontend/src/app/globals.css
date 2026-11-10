@@ -3,39 +3,44 @@
 @tailwind utilities;
 
 :root {
-  --background: #090d16;
-  --foreground: #f1f5f9;
+  --background: #07080c;
+  --foreground: #f3f4f6;
 }
 
 html {
   color-scheme: dark;
-  background-color: #090d16;
+  background-color: #07080c;
 }
 
 body {
   min-height: 100vh;
-  background-color: #090d16;
-  color: #f1f5f9;
+  background-color: #07080c;
+  color: #f3f4f6;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Custom scrollbar for dark cybersecurity theme */
+::selection {
+  background-color: rgba(124, 58, 237, 0.35);
+  color: #ede9fe;
+}
+
+/* Precision scrollbar for dark security console theme */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #0b1120;
+  background: #0b0e14;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1e293b;
-  border-radius: 4px;
+  background: #1e2436;
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #334155;
+  background: #2e3752;
 }

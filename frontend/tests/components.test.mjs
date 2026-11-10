@@ -59,6 +59,9 @@ test("Storage utilities manage history and watchlist persistence", () => {
   assert.match(content, /export function getWatchlist/, "Must export getWatchlist");
   assert.match(content, /export function addToWatchlist/, "Must export addToWatchlist");
   assert.match(content, /export function removeFromWatchlist/, "Must export removeFromWatchlist");
+  assert.match(content, /export async function syncWatchlist/, "Must export syncWatchlist");
+  assert.match(content, /export async function addWatchlistItem/, "Must export addWatchlistItem");
+  assert.match(content, /export async function removeWatchlistItem/, "Must export removeWatchlistItem");
 });
 
 test("Type declarations cover all backend models and schemas", () => {
@@ -75,5 +78,56 @@ test("Type declarations cover all backend models and schemas", () => {
   assert.match(content, /export interface ProvenanceResult/, "Must define ProvenanceResult");
   assert.match(content, /export interface SecurityFinding/, "Must define SecurityFinding");
   assert.match(content, /export interface AIInvestigationResult/, "Must define AIInvestigationResult");
+});
+
+test("BUG-03: getFileDiff encodes each path segment correctly", () => {
+  const apiPath = path.join(srcDir, "lib", "api.ts");
+  const content = fs.readFileSync(apiPath, "utf8");
+
+  // Verify that cleanPath is split by slash and mapped with encodeURIComponent
+  assert.match(
+    content,
+    /\.split\("\/"\)\s*\.map\(\(segment\)\s*=>\s*encodeURIComponent\(segment\)\)\s*\.join\("\/"\)/,
+    "getFileDiff must encode each path segment individually with encodeURIComponent"
+  );
+
+  // Test encoding logic directly
+  const testPath = "src/components/item#1 with space?.js";
+  const cleanPath = testPath.replace(/^\/+/, "");
+  const encodedPath = cleanPath
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+
+  assert.equal(
+    encodedPath,
+    "src/components/item%231%20with%20space%3F.js",
+    "Path segments with special characters must be properly escaped"
+  );
+});
+
+test("INT-01 & CODE-02: Watchlist persistence uses unified storage sync with backend primary and fallback cache", () => {
+  const pagePath = path.join(srcDir, "app", "page.tsx");
+  const watchlistViewPath = path.join(srcDir, "components", "WatchlistView.tsx");
+  const storagePath = path.join(srcDir, "lib", "storage.ts");
+
+  const pageContent = fs.readFileSync(pagePath, "utf8");
+  const viewContent = fs.readFileSync(watchlistViewPath, "utf8");
+  const storageContent = fs.readFileSync(storagePath, "utf8");
+
+  // page.tsx must use addWatchlistItem and syncWatchlist
+  assert.match(pageContent, /addWatchlistItem/, "page.tsx must use addWatchlistItem");
+  assert.match(pageContent, /syncWatchlist/, "page.tsx must syncWatchlist on mount and refresh");
+
+  // WatchlistView.tsx must use unified helpers
+  assert.match(viewContent, /addWatchlistItem/, "WatchlistView must use unified addWatchlistItem");
+  assert.match(viewContent, /removeWatchlistItem/, "WatchlistView must use unified removeWatchlistItem");
+
+  // Fallback ID structure matches backend format ${item.ecosystem}:${item.package_name}
+  assert.match(
+    storageContent,
+    /`\$\{item\.ecosystem\}:\$\{item\.package_name\}`/,
+    "Fallback ID must match backend format without timestamp divergence"
+  );
 });
 
