@@ -274,7 +274,7 @@ export function DiffViewer({
     return (
       <div
         data-testid="diff-viewer-loading"
-        className="w-full h-full min-h-[400px] flex items-center justify-center bg-surface-850 rounded-xl border border-surface-border p-8"
+        className="w-full h-full min-h-[400px] flex items-center justify-center bg-slate-900/90 rounded-xl border border-slate-800 p-8"
       >
         <div className="flex flex-col items-center gap-3 text-slate-400 font-mono text-xs">
           <div className="w-6 h-6 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
@@ -288,7 +288,7 @@ export function DiffViewer({
     return (
       <div
         data-testid="diff-viewer-empty"
-        className="w-full h-full min-h-[400px] flex items-center justify-center bg-surface-850 rounded-xl border border-surface-border p-8 text-center text-slate-500 font-mono text-xs"
+        className="w-full h-full min-h-[400px] flex items-center justify-center bg-slate-900/90 rounded-xl border border-slate-800 p-8 text-center text-slate-500 font-mono text-xs"
       >
         <div className="space-y-2">
           <FileCode className="w-8 h-8 mx-auto text-slate-600" />
@@ -308,7 +308,7 @@ export function DiffViewer({
   return (
     <div
       data-testid="diff-viewer"
-      className="w-full h-full flex flex-col bg-surface-950 rounded-xl border border-surface-border overflow-hidden font-mono text-xs shadow-xl"
+      className="w-full h-full flex flex-col bg-slate-950 rounded-xl border border-slate-800 overflow-hidden font-mono text-xs shadow-xl"
     >
       {/* Diff Header Bar */}
       <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-surface-850 border-b border-surface-border">
@@ -363,7 +363,7 @@ export function DiffViewer({
               onClick={() => setViewMode("unified")}
               className={`flex items-center gap-1 px-2 py-1 rounded transition-colors text-xs ${
                 viewMode === "unified"
-                  ? "bg-surface-800 text-violet-200 ring-1 ring-violet-500/40 shadow"
+                  ? "bg-slate-800 text-slate-100 shadow"
                   : "text-slate-400 hover:text-slate-200"
               }`}
               title="Unified View"
@@ -376,7 +376,7 @@ export function DiffViewer({
               onClick={() => setViewMode("split")}
               className={`flex items-center gap-1 px-2 py-1 rounded transition-colors text-xs ${
                 viewMode === "split"
-                  ? "bg-surface-800 text-violet-200 ring-1 ring-violet-500/40 shadow"
+                  ? "bg-slate-800 text-slate-100 shadow"
                   : "text-slate-400 hover:text-slate-200"
               }`}
               title="Side-by-side View"

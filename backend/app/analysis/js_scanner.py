@@ -169,6 +169,7 @@ _COLLECTED_TYPES = frozenset(
 )
 _JS_SUFFIXES = (".js", ".mjs", ".cjs", ".jsx")
 _TS_SUFFIXES = (".ts", ".mts", ".cts")
+_PY_SUFFIXES = (".py", ".pyw")
 
 
 def scannable_language(path: str) -> str | None:
@@ -181,6 +182,8 @@ def scannable_language(path: str) -> str | None:
         return "tsx"
     if lowered.endswith(_TS_SUFFIXES):
         return "typescript"
+    if lowered.endswith(_PY_SUFFIXES):
+        return "python"
     return None
 
 

@@ -83,6 +83,38 @@ def test_watchlist_check_and_status(test_setup: tuple[ScanManager, TestClient]) 
     assert "updates_detected" in check_data
 
 
+def test_watchlist_check_in_memory_updates(
+    test_setup: tuple[ScanManager, TestClient], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Verify POST /api/v1/watchlist/check actively processes entries in memory mode."""
+    manager, client = test_setup
+
+    client.post(
+        "/api/v1/watchlist",
+        json={"ecosystem": "npm", "package_name": "chalk", "notes": "Test CLI colors"},
+    )
+
+    async def mock_check_update(
+        client, ecosystem, package_name, current_version=None
+    ) -> tuple[bool, str]:
+        return (True, "5.3.0")
+
+    monkeypatch.setattr("app.monitoring.scheduler.check_package_update", mock_check_update)
+
+    res_check = client.post("/api/v1/watchlist/check")
+    assert res_check.status_code == 200
+    data = res_check.json()
+    assert data["checked_count"] == 1
+    assert data["updates_detected"] == 1
+    assert data["scans_triggered"] == 1
+
+    # Verify entry updated in memory
+    entries = manager.get_watchlist()
+    assert len(entries) == 1
+    assert entries[0]["has_update"] is True
+    assert entries[0]["latest_version"] == "5.3.0"
+
+
 def test_release_comparison_endpoints(test_setup: tuple[ScanManager, TestClient]) -> None:
     manager, client = test_setup
     now = datetime.now(UTC)

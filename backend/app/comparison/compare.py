@@ -71,7 +71,7 @@ def compare_inventories(
     package = FileTree(package_inventory)
     warnings: list[str] = []
     directory, method = _resolve_scope(metadata, match, repository, limits, warnings)
-    source = FileTree(source_inventory, directory)
+    source = FileTree(source_inventory, directory, cache=repository._cache)
 
     profile = collect_build_profile(source, repository, limits)
     scope = SourceScope(

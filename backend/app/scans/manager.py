@@ -37,7 +37,7 @@ from app.schemas.scans import (
     ScanState,
     ScanStatusResponse,
 )
-from app.source.github import GitHubSourceResolver
+from app.source import MultiHostSourceResolver
 
 logger = logging.getLogger(__name__)
 
@@ -198,10 +198,10 @@ class ScanManager:
                 resolver = (
                     self._resolver_factory(client)
                     if self._resolver_factory
-                    else GitHubSourceResolver(
+                    else MultiHostSourceResolver(
                         client,
                         limits=self.settings.registry_limits(),
-                        token=self.settings.github_token,
+                        github_token=self.settings.github_token,
                     )
                 )
 
@@ -723,6 +723,27 @@ class ScanManager:
                     return item
             except Exception as exc:
                 logger.warning("Error saving watchlist entry to DB: %s", exc)
+
+        # Check if there is already a completed scan for this package in memory
+        matching_scans = [
+            s
+            for s in self._scans.values()
+            if s.ecosystem.value == ecosystem
+            and s.package_name == package_name
+            and s.status == ScanState.COMPLETED
+        ]
+        if matching_scans:
+            matching_scans.sort(key=lambda s: s.created_at, reverse=True)
+            latest = matching_scans[0]
+            item["last_scanned_version"] = latest.version
+            if latest.report and latest.report.risk:
+                r_dict = (
+                    latest.report.risk
+                    if isinstance(latest.report.risk, dict)
+                    else latest.report.risk.model_dump()
+                )
+                item["last_risk_score"] = r_dict.get("score")
+                item["last_risk_level"] = r_dict.get("level")
 
         self._in_memory_watchlist[entry_id] = item
         return item

@@ -25,6 +25,7 @@ from app.schemas.scans import (
     ScanState,
 )
 from app.scoring.risk import score_release
+from app.source import MultiHostSourceResolver, SourceHostAdapter
 from app.source.github import GitHubSourceResolver
 from app.source.models import MatchStatus
 
@@ -40,7 +41,7 @@ async def execute_scan_pipeline(
     version: str,
     work_dir: Path,
     adapter: PackageAdapter,
-    resolver: GitHubSourceResolver,
+    resolver: SourceHostAdapter | GitHubSourceResolver | MultiHostSourceResolver,
     provenance_checker: NpmProvenanceChecker | PyPIProvenanceChecker | Any,
     ai_investigator: AIInvestigator,
     on_progress: ProgressCallback | None = None,
@@ -182,9 +183,7 @@ async def execute_scan_pipeline(
             95,
             "Running AI investigator (qwen2.5-coder:7b) on findings",
         )
-        ai_result = await ai_investigator.investigate(
-            metadata, match, report, security, risk, package_dir
-        )
+        ai_result = await ai_investigator.investigate(metadata, match, report, security, risk)
 
         # 11. Final report assembly
         completed_at = datetime.now(UTC)

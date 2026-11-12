@@ -22,7 +22,7 @@ flowchart TD
     subgraph "Core Verification Pipeline"
         EXT --> COMP["Inventory & File Comparison Engine"]
         COMP --> CLASSIFY["Generated Artifact Intelligence"]
-        CLASSIFY --> SCANNER["Tree-Sitter AST Security Scanner"]
+        CLASSIFY --> SCANNER["Tree-Sitter & Python AST Security Scanner"]
         SCANNER --> PROV["Sigstore Cryptographic Provenance"]
         PROV --> RISK["Deterministic 0-100 Risk Engine"]
     end
@@ -49,17 +49,23 @@ flowchart TD
 - Strictly bounds maximum archive size, uncompressed byte totals, file count, entry depth, and compression ratio.
 - Strips unsafe POSIX permissions, enforcing `0600` file permissions on extracted content.
 
-### 2.3 Source Resolution (`app.source.github`)
-- Discovers upstream GitHub repository from package metadata.
+### 2.3 Multi-Host Source Resolution (`app.source`)
+- Implements pluggable `SourceHostAdapter` protocol with `MultiHostSourceResolver` dispatching requests across:
+  - **GitHub (`GitHubSourceResolver`)**: Resolves smart-HTTP git upload-pack refs, commits, and codeload archives.
+  - **GitLab (`GitLabSourceResolver`)**: Parses GitLab project paths and groups, discovers git refs via packet-line upload-pack stream, and retrieves commit archives via GitLab's archive endpoint (`/-/archive/{commit}/...`).
+  - **Bitbucket (`BitbucketSourceResolver`)**: Discovers git refs and downloads commit tarballs (`/get/{commit}.tar.gz`).
 - Matches release version to exact git commit using four fallback tiers:
   1. `RECORDED_COMMIT_AND_TAG`: Package declares commit and matching git tag exists.
   2. `PACKAGE_TAG`: Exact package-prefixed tag (e.g. `v1.2.0`, `@scope/pkg@1.2.0`).
   3. `VERSION_TAG`: Bare semver tag (e.g. `1.2.0`).
   4. `RECORDED_COMMIT`: Commit recorded in publish metadata.
-- **Strict Invariant**: If no exact commit can be confirmed, the resolver returns `UNCERTAIN`. Veritor never assumes or falls back to the repository's default branch.
+- **Strict Invariants**:
+  - If no exact commit can be confirmed, the resolver returns `UNCERTAIN`. Veritor never assumes or falls back to the repository's default branch.
+  - Unrecognized code hosting platforms return `UNCERTAIN` with `UncertainReason.UNSUPPORTED_HOST` honestly.
 
 ### 2.4 Inventory Comparison & Artifact Intelligence (`app.comparison`)
 - Computes SHA-256 hashes of all published files against repository files.
+- **In-Memory Read Caching (`FileTree`)**: Bounded in-memory read caching eliminates redundant filesystem reads, file descriptor allocations, and SHA-256 hash recalculations for manifests (`package.json`, `tsconfig.json`) and configuration files during scope discovery, evidence extraction, and diff computation.
 - Classifies differing files into:
   - `SOURCE_AUTHENTIC`: Exact match with repository source file.
   - `LIKELY_GENERATED`: Verified build artifact supported by build configs (`tsconfig.json`, bundlers), source maps (`.map`), and token similarity.
@@ -67,12 +73,17 @@ flowchart TD
   - `UNCERTAIN`: Discrepancies without affirmative build evidence.
 
 ### 2.5 Static AST Security Scanner (`app.analysis`)
-- AST analysis powered by Tree-Sitter for JavaScript and TypeScript (`.js`, `.mjs`, `.cjs`, `.ts`, `.tsx`, `.mts`, `.cts`).
-- **Zero Execution**: Code is strictly parsed into syntax trees and never executed.
+- AST analysis powered by Tree-Sitter for JavaScript and TypeScript (`.js`, `.mjs`, `.cjs`, `.ts`, `.tsx`, `.mts`, `.cts`), and native Python `ast` parsing for Python source files (`.py`, `.pyw`, and extensionless Python scripts with shebangs).
+- **Zero Execution**: Code is strictly parsed into syntax trees and never executed under any circumstances.
 - **Differential Scanning**: Differentiates between pre-existing source patterns and newly added package modifications to eliminate false positives on legitimate APIs.
-- Rules cover 7 primary families:
-  1. `EXEC`: Dynamic execution (`eval`, `new Function`, `vm.runInContext`).
-  2. `PROC`: Process spawning (`child_process.exec`, `execSync`, `spawn`, `fork`).
+- Rules cover 7 primary families across both JS/TS and Python:
+  1. `EXEC`: Dynamic execution (`eval`, `exec`, `compile`, `new Function`, `vm.runInContext`).
+  2. `PROC`: Process spawning (`subprocess.run`, `Popen`, `os.system`, `child_process.exec`, `execSync`, `spawn`, `fork`).
+  3. `ENV`: Environment variable reading (`os.environ`, `os.getenv`, `process.env`).
+  4. `NET`: Network communication (`requests`, `urllib`, `httpx`, `aiohttp`, `fetch`, `http.request`, sockets).
+  5. `FS`: Sensitive filesystem reads and startup persistence (`open`, `Path.read_text`, `fs.readFile`, `/etc/cron`, `systemd`, `.bashrc`).
+  6. `OBF`: Obfuscated payloads, runtime decoders (`base64`, `zlib`, `gzip`, hex strings, character code joins).
+  7. `CORR`: Correlated multi-signal threats (`CORR-001` credentials + network exfiltration, `CORR-002` decode + execution, `CORR-003` network + process execution, `CORR-004` obfuscation + sensitive activity, `CORR-005` install-time execution in `setup.py` or npm lifecycle scripts).
   3. `ENV`: Environment inspection (`process.env`, credential dumps, API keys).
   4. `NET`: Network exfiltration (`http`, `https`, `fetch`, raw socket connections).
   5. `OBF`: Obfuscation (Base64 decoding, string hex encoding, Packer identifiers).
@@ -82,9 +93,13 @@ flowchart TD
 
 ### 2.6 Cryptographic Provenance Verification (`app.provenance`)
 - **npm**: Verifies Sigstore SLSA provenance bundles via Rekor transparency log public key infrastructure. Inspects Fulcio OIDC certificate extensions to confirm build identity, source repository, commit SHA, and GitHub Actions workflow.
-- **PyPI**: Verifies PEP 740 digital attestations and wheel cryptographic digests.
-- Result statuses: `VERIFIED`, `NOT_VERIFIED`, `UNAVAILABLE`, `INVALID`, `UNCERTAIN`.
-- **Safety Invariant**: Missing provenance awards 0 risk points and does not falsely imply maliciousness.
+- **PyPI (PEP 740)**: Verifies index-hosted PEP 740 digital attestations and wheel/sdist cryptographic digests using the official Sigstore verification suite (`sigstore>=4,<5`, `cryptography>=44`).
+  - **Dead Simple Signing Envelope (DSSE)**: Verifies Pre-Authentication Encoding (PAE) cryptographic signatures on ECDSA NIST P-256 with SHA-256 over in-toto statement payloads.
+  - **Fulcio OIDC Certificate Identity**: Validates leaf X.509 certificates, checking validity windows, expiration against Rekor transparency log timestamps, and trusted identity providers (`token.actions.githubusercontent.com`, `gitlab.com`, `accounts.google.com`).
+  - **Identity & Subject Binding**: Extracts repository, commit SHA, and workflow identity from Fulcio OIDs (`1.3.6.1.4.1.57264.1.*`) and Subject Alternative Name (SAN) URIs; matches signed subject SHA-256 digests against raw distribution bytes on disk.
+  - **Strict Security Boundaries**: Unverified bundle metadata is rejected without cryptographic verification (`NOT_VERIFIED`); expired certificates without proof of logging and signature corruption are marked `INVALID`.
+- **Result Statuses**: `VERIFIED`, `NOT_VERIFIED`, `UNAVAILABLE`, `INVALID`, `UNCERTAIN`.
+- **Safety Invariant**: Missing provenance awards 0 risk points and does not falsely imply maliciousness (`UNAVAILABLE`).
 
 ### 2.7 Deterministic Risk Engine (`app.scoring.risk`)
 - Transparent 0–100 heuristic scoring based purely on verifiable evidence:

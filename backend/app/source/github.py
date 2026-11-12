@@ -176,6 +176,10 @@ class GitHubSourceResolver:
         self._limits = limits or RegistryLimits()
         self._token = token
 
+    def can_handle(self, url: str) -> bool:
+        """Return True if the URL points to a GitHub repository."""
+        return parse_github_repository(url) is not None
+
     async def resolve(self, metadata: PackageMetadata) -> SourceMatch:
         """Find the commit for a package version. Lookup failures are returned as UNCERTAIN."""
         declared = metadata.repository

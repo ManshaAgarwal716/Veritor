@@ -295,11 +295,6 @@ export default function Home() {
     setWatchlist(synced);
   };
 
-  const handleNavSelect = (tab: NavTab) => {
-    setActiveTab(tab);
-    setMobileMenuOpen(false);
-  };
-
   return (
     <div className="flex h-screen bg-surface-950 text-slate-100 font-sans overflow-hidden select-none">
       {/* Desktop Left Sidebar */}
@@ -512,7 +507,36 @@ export default function Home() {
             {/* TAB 6: SETTINGS */}
             {activeTab === "settings" && <SettingsView />}
           </div>
-        </main>
+        )}
+
+        {/* TAB: HISTORY */}
+        {activeTab === "history" && (
+          <ScanHistoryView
+            history={history}
+            onSelectScan={handleSelectHistoryScan}
+            onClearHistory={() => setHistory([])}
+            onScanNew={() => setActiveTab("scanner")}
+          />
+        )}
+
+        {/* TAB: WATCHLIST */}
+        {activeTab === "watchlist" && (
+          <WatchlistView
+            watchlist={watchlist}
+            onTriggerScan={(ecosystem, pkgName, ver) => {
+              setFormParams({ ecosystem, packageName: pkgName, version: ver || "" });
+              setActiveTab("scanner");
+            }}
+            onRefresh={async () => {
+              const items = await syncWatchlist();
+              setWatchlist(items);
+            }}
+          />
+        )}
+
+        {/* TAB: SETTINGS */}
+        {activeTab === "settings" && <SettingsView />}
+      </main>
 
         {/* Console Status Bar */}
         <footer className="h-7 border-t border-surface-border bg-surface-900/95 px-4 flex items-center justify-between text-[11px] font-mono text-slate-400 select-none">

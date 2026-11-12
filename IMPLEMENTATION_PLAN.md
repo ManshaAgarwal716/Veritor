@@ -361,3 +361,99 @@ npm run build
 7. **Demo 6 — Export Capabilities**:
    - Click **Export JSON** to download standardized audit machine-readable metadata.
    - Click **Export PDF** to download the styled executive security assessment report.
+
+---
+
+### Phase 11: Post-Development Technical Audit & Engineering Hardening (in progress)
+
+- Conducted exhaustive full-stack technical audit across frontend, backend, APIs, adapters, comparison, classification, security scanner, provenance, risk scoring, AI, database, monitoring, exports, Docker, and CI/CD.
+- Produced [`docs/FINAL_AUDIT.md`](docs/FINAL_AUDIT.md) cataloging 18 findings categorized by severity, affected component, concrete code evidence, and explicit remediations.
+- Defined prioritized remediation roadmap:
+  - Phase 1: Immediate fixes (JSON export factor keys, Docker compose Postgres healthcheck, frontend watchlist API synchronization, in-memory watchlist checking).
+  - Phase 2: Technical depth enhancements (Python AST analyzer for PyPI packages, split-diff table rendering in `DiffViewer.tsx`, cryptographic verification of PEP 740 bundles via `sigstore.verify`).
+  - Phase 3: Testing and reliability (React component integration tests, Alembic migration rollback verification, concurrent pipeline stress testing).
+
+#### Completed Remediation Tasks
+1. **Remediation Task 1 (Low-Risk Bugs & Configuration Fixes)**:
+   - **BUG-01**: Updated JSON exporter to support `factors`, `contributing_factors`, and `contributing_evidence`.
+   - **BUG-02**: Parameterized PostgreSQL Docker Compose healthcheck using configured `$${POSTGRES_USER}` and `$${POSTGRES_DB}` variables.
+   - **BUG-03**: Implemented segment-by-segment `encodeURIComponent` URL path encoding in `getFileDiff`.
+   - **ASSUM-02**: Corrected `REPO_ROOT` resolution via `_find_repo_root` to support both local workspaces and containerized `WORKDIR /app` environments.
+2. **Remediation Task 2 (Watchlist Persistence Consistency & Concurrency)**:
+   - **INT-01**: Updated `ScannerForm` and `WatchlistView` to persist watchlist entries to the backend API (`POST /api/v1/watchlist`) with `localStorage` serving strictly as an offline fallback cache.
+   - **ASSUM-01**: Implemented full in-memory release monitoring and release-to-release diff computation in `ReleaseMonitoringScheduler` when running without a database (`session is None`). Added bounded concurrency (`DEFAULT_MAX_CONCURRENCY = 4`) via `asyncio.Semaphore`, duplicate scan detection, and `_check_lock` to prevent overlapping scheduled or on-demand checks.
+   - **CODE-02**: Consolidated duplicate persistence logic in `frontend/src/lib/storage.ts` with `syncWatchlist()`, `addWatchlistItem()`, and `removeWatchlistItem()`, maintaining state parity and unified ID formatting (`${ecosystem}:${packageName}`).
+3. **Remediation Task 3 (Native Python AST Security Analysis - SEC-01)**:
+   - Implemented modular, non-executing Python AST security scanner in `backend/app/analysis/py_scanner.py` using Python's built-in `ast` module.
+   - Detects all 8 suspicious threat categories: dynamic execution (`eval`, `exec`, `compile` -> `EXEC-001/002/003`), process execution (`subprocess`, `os.system`, `os.popen`, `ctypes` -> `PROC-001/002/003/004/005`), environment credential access (`os.environ`, `os.getenv` -> `ENV-001/002/003`), network communication (`requests`, `urllib`, `socket`, `httpx`, `aiohttp` -> `NET-001/002/003`), dynamic imports (`importlib.import_module`, `__import__` -> `EXEC-004/005`), suspicious filesystem paths and startup persistence writes (`FS-001/002`), runtime decoding and obfuscation (`OBF-001/002/003/004`), and install-time execution (`setup.py` -> `CORR-005`).
+   - Integrated into `scannable_language()` and `analyzer.py` pipeline, ensuring `.py` files in PyPI packages are fully scanned without receiving `UNSUPPORTED_LANGUAGE` gaps.
+   - Preserves deterministic risk scoring parity and schema consistency with JS/TS scanner.
+   - Added unit test suite in `backend/tests/test_py_scanner.py` (12 tests passed).
+4. **Remediation Task 4 (DiffViewer Split/Side-by-Side Mode - FEAT-01)**:
+   - Completed both Unified and Side-by-Side (Split) diff modes in [`frontend/src/components/DiffViewer.tsx`](file:///Users/apple12390/Veritor/frontend/src/components/DiffViewer.tsx).
+   - Implemented `parseUnifiedDiff()`: Parses hunk headers (`@@ -old,count +new,count @@`), tracks `oldLine` and `newLine` offsets accurately, and aligns modified lines (pairing deletion and addition sequences row-by-row with empty padding when deletion/addition counts differ) without fabricating missing lines.
+   - Built dual-column `SplitDiffTable`: Sticky comparison headers ("Source Repository" vs "Published Package"), aligned line numbering, independent side-by-side cells with status coloring, and indicator badges for added files missing in source repository and removed files.
+   - Implemented syntax highlighting (`highlightTokens()`) for code tokens (keywords, strings, comments, numbers, booleans) without external dependencies.
+   - Added complete state handling for binary files (`diff_status === "BINARY"`), added files missing in source (`ADDED`), removed files (`REMOVED`), identical files (`IDENTICAL`), empty states, and loading states.
+   - Implemented responsive horizontal scrolling and fluid layout for small screens.
+   - Created React component test suite in `frontend/tests/diff_viewer.test.mjs` (10 tests) verifying DOM rendering, hunk header parsing, line alignment, and syntax highlighting.
+5. **Remediation Task 5 (PyPI PEP 740 Cryptographic Attestation Verification - FEAT-02)**:
+   - Replaced unverified metadata extraction with cryptographic DSSE envelope and Sigstore verification in [`backend/app/provenance/pypi.py`](file:///Users/apple12390/Veritor/backend/app/provenance/pypi.py).
+   - Built `SigstorePyPIBundleVerifier` supporting both standard Sigstore bundles (`sigstore>=4,<5`, `sigstore.verify.Verifier`) and index-hosted PEP 740 attestation objects.
+   - Implemented Pre-Authentication Encoding (`dsse_pae`) for Dead Simple Signing Envelopes (DSSE) and verified ECDSA NIST P-256 signatures with SHA-256 against X.509 leaf certificates.
+   - Enforced strict certificate validity checking: validated validity dates (`not_valid_before_utc` and `not_valid_after_utc`), required transparency log timestamps for short-lived certificates, and explicitly rejected expired certificates without log proofs (`INVALID`).
+   - Validated trusted OIDC identity providers (`token.actions.githubusercontent.com`, `gitlab.com`, `accounts.google.com`), extracted source repository and commit identity from Fulcio OIDs (`1.3.6.1.4.1.57264.1.*`) and SAN URIs, and cryptographically verified that signed subject SHA-256 digests match actual artifact bytes on disk.
+   - Established strict boundary between metadata and cryptographic proof: unverified metadata payloads without cryptographic signatures are marked `NOT_VERIFIED`, while packages without attestations receive neutral `UNAVAILABLE` status (0 risk points).
+   - Created comprehensive unit test suite in [`backend/tests/test_pypi_provenance.py`](file:///Users/apple12390/Veritor/backend/tests/test_pypi_provenance.py) (12 tests) verifying offline verification, tampered signatures, mismatched digests, expired certs, untrusted issuers, unverified metadata, mock verifiers, and remote PEP 740 integrity API retrieval.
+   - Updated architecture documentation in [`docs/architecture.md`](file:///Users/apple12390/Veritor/docs/architecture.md).
+6. **Remediation Task 6 (Frontend Testing & DOM Test Harness - TST-01)**:
+   - Added `@testing-library/react`, `@testing-library/dom`, and `jsdom` to `frontend/package.json`.
+   - Implemented DOM test environment in [`frontend/tests/dom_setup.mjs`](file:///Users/apple12390/Veritor/frontend/tests/dom_setup.mjs) providing JSDOM global browser environments (`window`, `document`, `navigator`, `localStorage`, `HTMLElement`, `HTMLButtonElement`, `HTMLAnchorElement`, etc.), on-the-fly TypeScript transpilation (`loadTsModule`), and boundary-level HTTP mock interception (`mockFetch`).
+   - Implemented comprehensive DOM component tests in [`frontend/tests/scanner_form.test.mjs`](file:///Users/apple12390/Veritor/frontend/tests/scanner_form.test.mjs) (10 tests) covering form field rendering, ecosystem switching (npm <-> PyPI), empty package validation, version requirement & `latest` tag rejection, npm semver & PyPI PEP 440 validation, form submission for both ecosystems, watchlist triggers, loading and disabled states.
+   - Implemented Watchlist DOM & synchronization tests in [`frontend/tests/watchlist.test.mjs`](file:///Users/apple12390/Veritor/frontend/tests/watchlist.test.mjs) (9 tests) covering empty state, monitored table rendering, package addition validation, API submission & refresh triggers, package deletion & refresh triggers, update checking states, backend synchronization updating local fallback cache, and network failure fallback.
+   - Implemented report rendering tests in [`frontend/tests/report_dashboard.test.mjs`](file:///Users/apple12390/Veritor/frontend/tests/report_dashboard.test.mjs) (6 tests) covering risk score header and level badges across all risk levels (CRITICAL, HIGH, MEDIUM), file comparison metrics, tab navigation switching (`files`, `findings`, `provenance`, `ai`), release evolution delta comparisons, and JSON export API blob generation.
+   - Implemented DiffViewer DOM tests in [`frontend/tests/diff_viewer.test.mjs`](file:///Users/apple12390/Veritor/frontend/tests/diff_viewer.test.mjs) (10 tests) covering loading & empty states, identical clean file banner, binary file warnings, missing source indicators, removed in package indicators, unified mode gutter & line numbers, side-by-side mode aligned cells, hunk line-number tracking, and syntax highlighting.
+   - Implemented API client boundary tests in [`frontend/tests/api_client.test.mjs`](file:///Users/apple12390/Veritor/frontend/tests/api_client.test.mjs) (11 tests) verifying `ApiError` extraction, JSON & non-JSON error formats, `createScan`, path segment encoding in `getFileDiff` (`BUG-03`), watchlist status codes, health checks, and Ollama connection status.
+   - Preserved useful static contract checks in [`frontend/tests/components.test.mjs`](file:///Users/apple12390/Veritor/frontend/tests/components.test.mjs) (9 tests).
+   - All 55 frontend tests pass (`npm test`). Typecheck (`npm run typecheck`), lint (`npm run lint`), and production Next.js build (`npm run build`) pass cleanly. All 920 backend tests pass (`pytest backend/tests`).
+7. **Remediation Task 7 (Backend Concurrency & Stress Testing - TST-02)**:
+   - Added 11 reproducible concurrency and stress tests in [`backend/tests/test_concurrency_and_stress.py`](file:///Users/apple12390/Veritor/backend/tests/test_concurrency_and_stress.py).
+   - Validated simultaneous multi-package scans running in parallel without data cross-talk or race conditions.
+   - Validated duplicate scan request handling with unique UUID generation and isolated state.
+   - Tested filesystem temporary directory isolation under concurrent operations.
+   - Tested thread-safe concurrent archive extractions via `asyncio.to_thread`.
+   - Tested database session isolation under concurrent load using independent session scopes.
+   - Tested scheduler overlap prevention and bounded concurrency enforcement (`DEFAULT_MAX_CONCURRENCY = 4`).
+   - Tested active task cancellation and pipeline failure cleanup to guarantee zero orphaned temporary directories.
+   - Tested Ollama inference timeout handling, ensuring fallback without corrupting immutable deterministic findings or risk scores.
+   - Tested external API HTTP 429 rate limit error handling without infinite retry loops.
+   - Fixed CI typing compatibility in `backend/app/provenance/pypi.py` (`ExtensionOID` and `PyPIBundleVerifier` protocols) and ensured 100% clean `mypy` strict type checking and `ruff format` conformance across all 109 backend files.
+8. **Remediation Task 8 (Automated Database Migration & Rollback Tests - TST-03)**:
+   - Added automated database migration test suite in [`backend/tests/test_database_migrations.py`](file:///Users/apple12390/Veritor/backend/tests/test_database_migrations.py) executing full 7-step Alembic migration lifecycle.
+   - Built isolated dynamic test database infrastructure (`veritor_test_mig_<uuid>`) ensuring test runs never modify production or development databases. Automatically cleans up by terminating lingering connections (`pg_terminate_backend`) and dropping the test database during fixture teardown.
+   - Tested Alembic upgrade to `head`, verifying table creation across all 9 application models plus `alembic_version`.
+   - Tested schema integrity: verified release monitoring columns on `watchlist_entries` (`latest_version`, `has_update`, `last_checked_at`, `diff_summary_json`), scan state tracking columns, and performance indexes (`ix_packages_ecosystem_name`, `ix_scans_pkg_ver`, `ix_scans_created_at`, `ix_watchlist_ecosystem_package`).
+   - Tested foreign-key constraints and cascade deletions: verified deleting a parent `Scan` record cascades cleanly to associated `ScanReport` and `SecurityFinding` records, and verified `IntegrityError` rejection on foreign-key violations.
+   - Tested application repository operations (`ScanRepository` save/get scan, save/get report, add/get/update/remove watchlist entries) against the migrated database.
+   - Tested partial rollback to `001_initial_schema` (confirming release monitoring column drops) and full rollback to `base` (confirming all application tables are cleanly dropped).
+   - Tested re-upgrade from `base` to `head` and re-verified application repository operations to guarantee idempotent migration execution.
+   - Tested both SQLite and live PostgreSQL environments (`test_sqlite_migration_lifecycle` and `test_postgres_migration_lifecycle`).
+   - Integrated automated migration testing into GitHub Actions CI (`.github/workflows/ci.yml`) using a live PostgreSQL 16 container service.
+   - Test metrics: **933 backend tests passed**, **55 frontend tests passed**. Zero mypy errors, zero ruff errors.
+9. **Remediation Task 9 (Performance Optimization & Multi-Host Source Adapters - PERF-01, PERF-02, CODE-01, FEAT-03)**:
+   - **CODE-01**: Verified callsites across the codebase and removed the unused `package_dir` parameter and `Path` import from `AIInvestigator.investigate()` (`backend/app/ai/investigator.py`), `backend/app/scans/pipeline.py`, and `backend/app/analysis/service.py`.
+   - **PERF-01**: Implemented bounded in-memory read caching in `FileTree` (`backend/app/comparison/trees.py`), keyed by the entry's canonical path in the underlying inventory. Sub-scoped views inherit the parent tree's cache (`source = FileTree(source_inventory, directory, cache=repository._cache)`), eliminating repeated disk I/O, file descriptor opens, and redundant SHA-256 recalculations during scope resolution, build profiling, artifact classification, and diff calculation. Added caching and benchmark tests (`test_file_tree_caching_and_hit_counts`, `test_comparison_performance_benchmark`).
+   - **PERF-02**: Implemented true bounded concurrency in `ReleaseMonitoringScheduler` (`backend/app/monitoring/scheduler.py`) across database and in-memory watchlist modes. Package checks run concurrently via `asyncio.gather` bounded by `asyncio.Semaphore(self.max_concurrency)`, while database session commits and scan triggering are executed safely after responses resolve, preventing database lock contention while respecting registry rate limits and timeouts.
+   - **FEAT-03**:
+     - Designed `SourceHostAdapter` protocol in [`backend/app/source/base.py`](file:///Users/apple12390/Veritor/backend/app/source/base.py).
+     - Generalized repository models (`BaseRepository`, `GitHubRepository`, `GitLabRepository`, `BitbucketRepository`, `AnyRepository`) in `backend/app/source/models.py`.
+     - Implemented `GitLabSourceResolver` (`backend/app/source/gitlab.py`) with project/group parsing, git upload-pack `info/refs` packet stream parsing, candidate tag matching, and commit tarball downloads (`/-/archive/{commit}/...`).
+     - Implemented `BitbucketSourceResolver` (`backend/app/source/bitbucket.py`) with repository parsing, git upload-pack refs matching, and commit tarball retrieval (`/get/{commit}.tar.gz`).
+     - Implemented `MultiHostSourceResolver` (`backend/app/source/resolvers.py`) dispatcher, returning `UNCERTAIN` with `UncertainReason.UNSUPPORTED_HOST` honestly for unsupported hosts (e.g. SourceForge, custom internal hosts).
+     - Updated `ScanManager` default resolver to `MultiHostSourceResolver`.
+     - Added 12 unit tests in [`backend/tests/test_source_adapters.py`](file:///Users/apple12390/Veritor/backend/tests/test_source_adapters.py).
+   - Test metrics: **947 backend tests passed**, **55 frontend tests passed**. Zero mypy errors, zero ruff formatting or lint errors.
+
+
+
+

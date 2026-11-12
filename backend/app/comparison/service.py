@@ -5,13 +5,14 @@ from app.adapters.base import PackageAdapter
 from app.archives.extract import ExtractionLimits, extract_archive
 from app.comparison.compare import compare_inventories
 from app.comparison.models import ComparisonLimits, ReleaseComparison
+from app.source import SourceHostAdapter
 from app.source.github import GitHubSourceResolver
 from app.source.models import MatchStatus
 
 
 async def compare_release(
     adapter: PackageAdapter,
-    resolver: GitHubSourceResolver,
+    resolver: SourceHostAdapter | GitHubSourceResolver,
     name: str,
     version: str,
     work_dir: Path,
