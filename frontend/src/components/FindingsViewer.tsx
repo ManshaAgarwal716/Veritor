@@ -56,33 +56,33 @@ export function FindingsViewer({
   const getSeverityBadge = (severity: FindingSeverity) => {
     switch (severity) {
       case "CRITICAL":
-        return "bg-rose-500/20 text-rose-300 border-rose-500/40";
+        return "bg-soc-critical-bg text-rose-300 border-soc-critical-border";
       case "HIGH":
         return "bg-orange-500/20 text-orange-300 border-orange-500/40";
       case "MEDIUM":
         return "bg-amber-500/20 text-amber-300 border-amber-500/40";
       case "LOW":
-        return "bg-blue-500/20 text-blue-300 border-blue-500/40";
+        return "bg-violet-950/60 text-violet-300 border-violet-800";
       case "INFO":
       default:
-        return "bg-slate-800 text-slate-300 border-slate-700";
+        return "bg-surface-800 text-slate-300 border-surface-border";
     }
   };
 
   return (
     <div className="w-full space-y-6">
       {/* Top Severity Filter Bar */}
-      <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800 flex flex-wrap items-center justify-between gap-3 font-mono text-xs">
+      <div className="p-4 rounded-xl bg-surface-850 border border-surface-border flex flex-wrap items-center justify-between gap-3 font-mono text-xs">
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-slate-500 mr-1 flex items-center gap-1">
-            <Filter className="w-3.5 h-3.5" /> Severity:
+          <span className="text-slate-400 mr-1 flex items-center gap-1">
+            <Filter className="w-3.5 h-3.5 text-violet-400" /> Severity:
           </span>
           <button
             onClick={() => setSeverityFilter("ALL")}
             className={`px-2.5 py-1 rounded transition-colors ${
               severityFilter === "ALL"
-                ? "bg-slate-700 text-slate-100 font-bold border border-slate-600"
-                : "bg-slate-950 text-slate-400 hover:text-slate-200 border border-slate-800"
+                ? "bg-violet-600/30 text-violet-200 font-bold border border-violet-500/50"
+                : "bg-surface-950 text-slate-400 hover:text-slate-200 border border-surface-border"
             }`}
           >
             All ({findings.length})
@@ -93,8 +93,8 @@ export function FindingsViewer({
               onClick={() => setSeverityFilter(sev)}
               className={`px-2.5 py-1 rounded transition-colors ${
                 severityFilter === sev
-                  ? "bg-slate-700 text-slate-100 font-bold border border-slate-600"
-                  : "bg-slate-950 text-slate-400 hover:text-slate-200 border border-slate-800"
+                  ? "bg-surface-800 text-white font-bold border border-surface-700 ring-1 ring-violet-500/30"
+                  : "bg-surface-950 text-slate-400 hover:text-slate-200 border border-surface-border"
               }`}
             >
               {sev} ({severityCounts[sev] || 0})
@@ -118,10 +118,10 @@ export function FindingsViewer({
             return (
               <div
                 key={idx}
-                className="p-5 rounded-xl bg-slate-900/90 border border-slate-800 space-y-3.5 font-mono shadow-md hover:border-slate-700 transition-colors"
+                className="p-5 rounded-xl bg-surface-850 border border-surface-border space-y-3.5 font-mono shadow-md hover:border-violet-600/40 transition-colors"
               >
                 {/* Header: Rule ID, Severity, File Location */}
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-surface-border pb-3">
                   <div className="flex items-center gap-2">
                     <span
                       className={`text-[11px] font-bold px-2 py-0.5 rounded border ${getSeverityBadge(
@@ -130,10 +130,10 @@ export function FindingsViewer({
                     >
                       {finding.severity}
                     </span>
-                    <span className="font-bold text-slate-200 text-sm">
+                    <span className="font-bold text-white text-sm">
                       {finding.rule_id}
                     </span>
-                    <span className="text-[11px] text-slate-500">
+                    <span className="text-[11px] text-slate-400">
                       Confidence: {(finding.confidence * 100).toFixed(0)}%
                     </span>
                   </div>
@@ -145,7 +145,7 @@ export function FindingsViewer({
                     {onSelectFile && (
                       <button
                         onClick={() => onSelectFile(finding.path)}
-                        className="inline-flex items-center gap-1 text-cyan-400 hover:text-cyan-300 transition-colors"
+                        className="inline-flex items-center gap-1 text-violet-400 hover:text-violet-300 transition-colors"
                         title="View file diff"
                       >
                         <ExternalLink className="w-3.5 h-3.5" />
@@ -162,9 +162,9 @@ export function FindingsViewer({
 
                 {/* Code Evidence Snippet */}
                 {finding.evidence && (
-                  <div className="rounded-lg bg-slate-950 border border-slate-800 p-3 overflow-x-auto text-xs">
-                    <div className="flex items-center gap-1.5 text-slate-500 text-[10px] uppercase mb-1.5 font-semibold">
-                      <Code2 className="w-3 h-3 text-slate-400" />
+                  <div className="rounded-lg bg-surface-950 border border-surface-border p-3 overflow-x-auto text-xs">
+                    <div className="flex items-center gap-1.5 text-slate-400 text-[10px] uppercase mb-1.5 font-semibold">
+                      <Code2 className="w-3 h-3 text-violet-400" />
                       <span>Code Evidence (Line {finding.line})</span>
                     </div>
                     <pre className="text-emerald-300/90 whitespace-pre font-mono text-[11px]">
@@ -186,11 +186,11 @@ export function FindingsViewer({
 
                 {/* AI Behavioral Correlation (if available) */}
                 {aiMatch && (
-                  <div className="p-3.5 rounded-lg bg-violet-500/10 border border-violet-500/30 text-xs space-y-1.5 text-violet-200">
+                  <div className="p-3.5 rounded-lg bg-violet-950/40 border border-violet-800/60 text-xs space-y-1.5 text-violet-200">
                     <div className="flex items-center gap-1.5 text-violet-400 font-bold">
                       <Sparkles className="w-3.5 h-3.5" />
                       <span>AI Reasoning Analysis</span>
-                      <span className="text-[10px] ml-auto font-normal px-2 py-0.5 rounded bg-violet-500/20 border border-violet-500/40">
+                      <span className="text-[10px] ml-auto font-normal px-2 py-0.5 rounded bg-violet-900/50 border border-violet-700/60 text-violet-300">
                         FP Likelihood: {aiMatch.false_positive_likelihood}
                       </span>
                     </div>
@@ -202,9 +202,9 @@ export function FindingsViewer({
           })}
         </div>
       ) : (
-        <div className="p-12 rounded-xl bg-slate-900/90 border border-slate-800 text-center font-mono space-y-2">
+        <div className="p-12 rounded-xl bg-surface-850 border border-surface-border text-center font-mono space-y-2">
           <ShieldAlert className="w-8 h-8 mx-auto text-emerald-400" />
-          <h4 className="text-slate-200 font-bold text-sm">No Security Findings Detected</h4>
+          <h4 className="text-white font-bold text-sm">No Security Findings Detected</h4>
           <p className="text-xs text-slate-400 max-w-md mx-auto">
             Static AST analysis found zero unauthorized eval, exec, network calls, or malicious lifecycle hooks matching current criteria.
           </p>
@@ -213,7 +213,7 @@ export function FindingsViewer({
 
       {/* Analysis Gaps Section */}
       {gaps.length > 0 && (
-        <div className="p-5 rounded-xl bg-slate-900/90 border border-slate-800 space-y-3 font-mono text-xs">
+        <div className="p-5 rounded-xl bg-surface-850 border border-surface-border space-y-3 font-mono text-xs">
           <div className="flex items-center gap-2 text-amber-400 font-bold">
             <AlertTriangle className="w-4 h-4" />
             <span>Analysis Gaps &amp; Scanner Limitations ({gaps.length})</span>
@@ -223,7 +223,7 @@ export function FindingsViewer({
           </p>
           <div className="space-y-2">
             {gaps.map((gap, i) => (
-              <div key={i} className="p-2.5 rounded bg-slate-950 border border-slate-800 flex items-start gap-2">
+              <div key={i} className="p-2.5 rounded bg-surface-950 border border-surface-border flex items-start gap-2">
                 <span className="text-slate-500">•</span>
                 <span className="text-slate-300 font-semibold">{gap.path}:</span>
                 <span className="text-slate-400">{gap.reason}</span>

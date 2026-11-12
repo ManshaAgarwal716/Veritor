@@ -2,19 +2,21 @@
 
 import React, { useEffect, useState } from "react";
 import {
-  ShieldAlert,
+  LayoutDashboard,
+  ScanLine,
+  FileSearch,
   History,
   Bookmark,
   Settings as SettingsIcon,
+  Shield,
+  Database,
   Cpu,
-  Server,
-  Sparkles,
 } from "lucide-react";
 import { checkBackendHealth, checkOllamaConnection } from "../lib/api";
 
 interface NavbarProps {
-  activeTab: "scanner" | "report" | "history" | "watchlist" | "settings";
-  setActiveTab: (tab: "scanner" | "report" | "history" | "watchlist" | "settings") => void;
+  activeTab: "overview" | "scanner" | "report" | "history" | "watchlist" | "settings" | string;
+  setActiveTab: (tab: "overview" | "scanner" | "report" | "history" | "watchlist" | "settings" | string) => void;
   hasActiveReport: boolean;
   historyCount: number;
   watchlistCount: number;
@@ -62,75 +64,80 @@ export function Navbar({
   }, []);
 
   return (
-    <header className="sticky top-0 z-50 backdrop-blur-md bg-slate-950/80 border-b border-slate-800">
+    <header className="bg-surface-900 border-b border-surface-border sticky top-0 z-40 select-none">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          {/* Brand */}
+        <div className="flex items-center justify-between h-14">
+          {/* Logo & Brand */}
           <div
-            onClick={() => setActiveTab("scanner")}
-            className="flex items-center gap-3 cursor-pointer group"
+            className="flex items-center gap-3 cursor-pointer"
+            onClick={() => setActiveTab("overview")}
           >
-            <div className="relative p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 group-hover:border-emerald-500/60 transition-colors">
-              <ShieldAlert className="w-5 h-5 text-emerald-400" />
-              <span className="absolute -top-1 -right-1 flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-              </span>
+            <div className="w-8 h-8 rounded-md bg-gradient-to-br from-violet-600 to-violet-900 border border-violet-500/30 flex items-center justify-center shadow-glow-sm">
+              <Shield className="w-4 h-4 text-white" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-bold tracking-wider text-slate-100 font-mono text-lg">
-                  VERITOR
-                </span>
-                <span className="text-[10px] uppercase font-semibold tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                  SUPPLY CHAIN
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-400 hidden sm:block">
-                Artifact &amp; Provenance Intelligence
-              </p>
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-sm tracking-wider text-white font-mono">
+                VERITOR
+              </span>
+              <span className="text-[10px] px-1.5 py-0.2 rounded bg-surface-800 text-violet-400 font-mono border border-surface-700">
+                SOC
+              </span>
             </div>
           </div>
 
           {/* Navigation Links */}
-          <nav className="flex items-center gap-1 sm:gap-2">
+          <nav className="flex items-center gap-1">
             <button
-              onClick={() => setActiveTab("scanner")}
-              className={`px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all ${
-                activeTab === "scanner"
-                  ? "bg-slate-800 text-emerald-400 border border-emerald-500/30 shadow-sm shadow-emerald-950"
-                  : "text-slate-300 hover:text-slate-100 hover:bg-slate-900"
+              onClick={() => setActiveTab("overview")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-mono transition-colors ${
+                activeTab === "overview"
+                  ? "bg-violet-950/60 text-white border border-violet-700/60"
+                  : "text-slate-400 hover:text-white hover:bg-surface-800"
               }`}
             >
-              Scanner
+              <LayoutDashboard className="w-3.5 h-3.5" />
+              <span>Overview</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab("scanner")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-mono transition-colors ${
+                activeTab === "scanner"
+                  ? "bg-violet-950/60 text-white border border-violet-700/60"
+                  : "text-slate-400 hover:text-white hover:bg-surface-800"
+              }`}
+            >
+              <ScanLine className="w-3.5 h-3.5" />
+              <span>Scanner</span>
             </button>
 
             {hasActiveReport && (
               <button
                 onClick={() => setActiveTab("report")}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-mono transition-colors ${
                   activeTab === "report"
-                    ? "bg-slate-800 text-cyan-400 border border-cyan-500/30 shadow-sm"
-                    : "text-slate-300 hover:text-slate-100 hover:bg-slate-900"
+                    ? "bg-violet-950/60 text-white border border-violet-700/60"
+                    : "text-slate-400 hover:text-white hover:bg-surface-800"
                 }`}
               >
-                <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-                Report
+                <FileSearch className="w-3.5 h-3.5 text-violet-400" />
+                <span>Report</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-pulse" />
               </button>
             )}
 
             <button
               onClick={() => setActiveTab("history")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-mono transition-colors ${
                 activeTab === "history"
-                  ? "bg-slate-800 text-slate-100 border border-slate-700"
-                  : "text-slate-300 hover:text-slate-100 hover:bg-slate-900"
+                  ? "bg-violet-950/60 text-white border border-violet-700/60"
+                  : "text-slate-400 hover:text-white hover:bg-surface-800"
               }`}
             >
-              <History className="w-3.5 h-3.5 text-slate-400" />
-              <span>History</span>
+              <History className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">History</span>
               {historyCount > 0 && (
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-800 text-slate-300 border border-slate-700">
+                <span className="text-[10px] px-1 rounded bg-surface-800 text-slate-300 border border-surface-700">
                   {historyCount}
                 </span>
               )}
@@ -138,16 +145,16 @@ export function Navbar({
 
             <button
               onClick={() => setActiveTab("watchlist")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-mono transition-colors ${
                 activeTab === "watchlist"
-                  ? "bg-slate-800 text-slate-100 border border-slate-700"
-                  : "text-slate-300 hover:text-slate-100 hover:bg-slate-900"
+                  ? "bg-violet-950/60 text-white border border-violet-700/60"
+                  : "text-slate-400 hover:text-white hover:bg-surface-800"
               }`}
             >
-              <Bookmark className="w-3.5 h-3.5 text-slate-400" />
+              <Bookmark className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Watchlist</span>
               {watchlistCount > 0 && (
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-800 text-amber-300 border border-amber-500/30">
+                <span className="text-[10px] px-1 rounded bg-surface-800 text-slate-300 border border-surface-700">
                   {watchlistCount}
                 </span>
               )}
@@ -155,55 +162,32 @@ export function Navbar({
 
             <button
               onClick={() => setActiveTab("settings")}
-              className={`p-2 rounded-md text-xs sm:text-sm font-medium transition-all ${
-                activeTab === "settings"
-                  ? "bg-slate-800 text-slate-100 border border-slate-700"
-                  : "text-slate-400 hover:text-slate-100 hover:bg-slate-900"
+              className={`p-1.5 rounded-md text-slate-400 hover:text-white hover:bg-surface-800 transition-colors ${
+                activeTab === "settings" ? "text-violet-400 bg-surface-800" : ""
               }`}
-              title="Settings & System Status"
+              title="Settings"
             >
               <SettingsIcon className="w-4 h-4" />
             </button>
           </nav>
 
-          {/* System Status Indicators */}
-          <div className="hidden md:flex items-center gap-3 border-l border-slate-800 pl-4 text-xs font-mono">
-            {/* Backend status */}
-            <div
-              className="flex items-center gap-1.5"
-              title={backendOnline ? "FastAPI Backend is Online" : "FastAPI Backend is Offline"}
-            >
-              <Server className="w-3.5 h-3.5 text-slate-400" />
-              <span className="text-slate-400">API:</span>
+          {/* Right Status */}
+          <div className="hidden lg:flex items-center gap-2">
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-surface-850 border border-surface-border text-[11px] font-mono text-slate-400">
+              <Database className="w-3 h-3" />
+              <span>API:</span>
               <span
-                className={`w-2 h-2 rounded-full ${
-                  backendOnline === null
-                    ? "bg-slate-500 animate-pulse"
-                    : backendOnline
-                    ? "bg-emerald-500 shadow-sm shadow-emerald-500"
-                    : "bg-rose-500"
+                className={`w-1.5 h-1.5 rounded-full ${
+                  backendOnline ? "bg-emerald-400" : "bg-rose-500"
                 }`}
               />
             </div>
-
-            {/* Ollama status */}
-            <div
-              className="flex items-center gap-1.5"
-              title={
-                ollamaOnline
-                  ? "Ollama AI Engine Connected (qwen2.5-coder:7b ready)"
-                  : "Ollama Offline (Deterministic Fallback Active)"
-              }
-            >
-              <Cpu className="w-3.5 h-3.5 text-slate-400" />
-              <span className="text-slate-400">AI:</span>
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-surface-850 border border-surface-border text-[11px] font-mono text-slate-400">
+              <Cpu className="w-3 h-3" />
+              <span>AI:</span>
               <span
-                className={`w-2 h-2 rounded-full ${
-                  ollamaOnline === null
-                    ? "bg-slate-500 animate-pulse"
-                    : ollamaOnline
-                    ? "bg-cyan-400 shadow-sm shadow-cyan-400"
-                    : "bg-amber-500"
+                className={`w-1.5 h-1.5 rounded-full ${
+                  ollamaOnline ? "bg-violet-400" : "bg-slate-500"
                 }`}
               />
             </div>
@@ -213,4 +197,3 @@ export function Navbar({
     </header>
   );
 }
-

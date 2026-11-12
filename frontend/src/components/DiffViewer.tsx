@@ -277,7 +277,7 @@ export function DiffViewer({
         className="w-full h-full min-h-[400px] flex items-center justify-center bg-slate-900/90 rounded-xl border border-slate-800 p-8"
       >
         <div className="flex flex-col items-center gap-3 text-slate-400 font-mono text-xs">
-          <div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+          <div className="w-6 h-6 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
           <span>Loading diff for {filePath}...</span>
         </div>
       </div>
@@ -311,10 +311,10 @@ export function DiffViewer({
       className="w-full h-full flex flex-col bg-slate-950 rounded-xl border border-slate-800 overflow-hidden font-mono text-xs shadow-xl"
     >
       {/* Diff Header Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-slate-900 border-b border-slate-800">
+      <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-surface-850 border-b border-surface-border">
         <div className="flex items-center gap-2 truncate">
-          <FileCode className="w-4 h-4 text-emerald-400 shrink-0" />
-          <span className="font-bold text-slate-200 truncate">{filePath}</span>
+          <FileCode className="w-4 h-4 text-violet-400 shrink-0" />
+          <span className="font-bold text-white truncate">{filePath}</span>
           <span
             className={`text-[10px] px-2 py-0.5 rounded border ${
               isAdded
@@ -323,7 +323,7 @@ export function DiffViewer({
                 ? "bg-rose-500/20 text-rose-300 border-rose-500/30"
                 : diff.status === "MODIFIED"
                 ? "bg-amber-500/20 text-amber-300 border-amber-500/30"
-                : "bg-slate-800 text-slate-400 border-slate-700"
+                : "bg-surface-800 text-slate-400 border-surface-border"
             }`}
           >
             {diff.status}
@@ -339,7 +339,7 @@ export function DiffViewer({
             </span>
           )}
           {diff.classification && (
-            <span className="text-[10px] px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+            <span className="text-[10px] px-2 py-0.5 rounded bg-violet-950/60 text-violet-300 border border-violet-800">
               {diff.classification}
             </span>
           )}
@@ -357,7 +357,7 @@ export function DiffViewer({
           </div>
 
           {/* View Mode Toggle */}
-          <div className="flex items-center bg-slate-950 p-0.5 rounded-lg border border-slate-800">
+          <div className="flex items-center bg-surface-950 p-0.5 rounded-lg border border-surface-border">
             <button
               data-testid="toggle-unified"
               onClick={() => setViewMode("unified")}
@@ -390,7 +390,7 @@ export function DiffViewer({
           {diff.unified && (
             <button
               onClick={copyDiff}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 transition-colors"
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-surface-800 hover:bg-surface-750 border border-surface-border text-slate-300 transition-colors"
               title="Copy diff to clipboard"
             >
               {copied ? (
